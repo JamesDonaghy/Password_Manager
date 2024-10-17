@@ -1,0 +1,14 @@
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\bin\Debug\net8.0-windows\MyWindowsFormsApp.exe
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\bin\Debug\net8.0-windows\MyWindowsFormsApp.deps.json
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\bin\Debug\net8.0-windows\MyWindowsFormsApp.runtimeconfig.json
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\bin\Debug\net8.0-windows\MyWindowsFormsApp.dll
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\bin\Debug\net8.0-windows\MyWindowsFormsApp.pdb
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\MyWindowsFormsApp.GeneratedMSBuildEditorConfig.editorconfig
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\MyWindowsFormsApp.AssemblyInfoInputs.cache
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\MyWindowsFormsApp.AssemblyInfo.cs
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\MyWindowsFormsApp.csproj.CoreCompileInputs.cache
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\MyWindowsFormsApp.dll
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\refint\MyWindowsFormsApp.dll
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\MyWindowsFormsApp.pdb
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\MyWindowsFormsApp.genruntimeconfig.cache
+E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\ref\MyWindowsFormsApp.dll
