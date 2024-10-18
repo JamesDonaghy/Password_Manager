@@ -12,3 +12,4 @@ E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\refin
 E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\MyWindowsFormsApp.pdb
 E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\MyWindowsFormsApp.genruntimeconfig.cache
 E:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\ref\MyWindowsFormsApp.dll
+e:\VS Projects\Password_Manager\MyWindowsFormsApp\obj\Debug\net8.0-windows\MyWindowsFormsApp.sourcelink.json

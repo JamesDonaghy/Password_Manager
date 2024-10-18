@@ -10,16 +10,7 @@ namespace PasswordManager
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-
-            // Show the login form
-            using (var loginForm = new LoginForm())
-            {
-                if (loginForm.ShowDialog() == DialogResult.OK)
-                {
-                    // If login is successful, run the main form
-                    Application.Run(new MainForm());
-                }
-            }
+            Application.Run(new LoginForm()); // Start with the LoginForm
         }
     }
 }

@@ -9,36 +9,55 @@ namespace PasswordManager
         private TextBox txtUsername;
         private TextBox txtPassword;
         private TextBox txtNotes;
-        private Button btnAdd;
-        private Button btnView;
-        private Button btnDelete;
         private DataGridView dgvPasswords;
+        private TableLayoutPanel tableLayoutPanel;
 
         public MainForm()
         {
             // Initialize components
-            txtService = new TextBox { PlaceholderText = "Service Name", Dock = DockStyle.Top };
-            txtUsername = new TextBox { PlaceholderText = "Username", Dock = DockStyle.Top };
-            txtPassword = new TextBox { PlaceholderText = "Password", Dock = DockStyle.Top, PasswordChar = '*' };
-            txtNotes = new TextBox { PlaceholderText = "Notes", Dock = DockStyle.Top, Multiline = true, Height = 60 };
-            btnAdd = new Button { Text = "Add Password", Dock = DockStyle.Top };
-            btnView = new Button { Text = "View Passwords", Dock = DockStyle.Top };
-            btnDelete = new Button { Text = "Delete Password", Dock = DockStyle.Top };
+            txtService = new TextBox { PlaceholderText = "Service Name", Dock = DockStyle.Fill };
+            txtUsername = new TextBox { PlaceholderText = "Username", Dock = DockStyle.Fill };
+            txtPassword = new TextBox { PlaceholderText = "Password", Dock = DockStyle.Fill, PasswordChar = '*' };
+            txtNotes = new TextBox { PlaceholderText = "Notes", Dock = DockStyle.Fill, Multiline = true, Height = 80 };
             dgvPasswords = new DataGridView { Dock = DockStyle.Fill };
 
-            // Add components to the form
-            Controls.Add(dgvPasswords);
-            Controls.Add(btnDelete);
-            Controls.Add(btnView);
-            Controls.Add(txtNotes);
-            Controls.Add(txtPassword);
-            Controls.Add(txtUsername);
-            Controls.Add(txtService);
-            Controls.Add(btnAdd);
+            // Create TableLayoutPanel for better layout management
+            tableLayoutPanel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 4, // Adjusted row count
+                AutoSize = true,
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.Single
+            };
+
+            // Add controls to the TableLayoutPanel
+            tableLayoutPanel.Controls.Add(txtService, 0, 0);
+            tableLayoutPanel.Controls.Add(txtUsername, 0, 1);
+            tableLayoutPanel.Controls.Add(txtPassword, 0, 2);
+            tableLayoutPanel.Controls.Add(txtNotes, 0, 3);
+            tableLayoutPanel.SetColumnSpan(txtNotes, 2); // Span notes across two columns
+            tableLayoutPanel.SetColumnSpan(dgvPasswords, 2); // Span DataGridView across two columns
+
+            // Add TableLayoutPanel and DataGridView to the form
+            Controls.Add(tableLayoutPanel);
+            Controls.Add(dgvPasswords); // DataGridView at the bottom
 
             // Set form properties
             Text = "Password Manager";
-            Size = new System.Drawing.Size(400, 600);
+            Size = new System.Drawing.Size(1000, 600); // Set size to 1000x600
+            StartPosition = FormStartPosition.Manual; // Allow manual positioning
+            FormBorderStyle = FormBorderStyle.FixedDialog; // Prevent resizing
+            MaximizeBox = false; // Disable maximize button
+
+            // Event handlers
+            this.FormClosing += MainForm_FormClosing; // Handle form closing event
+        }
+
+        // Handle form closing to stop the application
+        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            Application.Exit(); // Stop the application
         }
     }
 }
