@@ -10,6 +10,8 @@ namespace PasswordManager
         private TextBox txtPassword;
         private Button btnLogin;
         private Label lblMessage;
+        private Button btnTogglePasswordVisibility; // Button to toggle password visibility
+        private bool isPasswordVisible = false; // Track visibility state
 
         // In-memory user store for demonstration
         private Dictionary<string, string> users = new Dictionary<string, string>
@@ -33,6 +35,10 @@ namespace PasswordManager
             btnLogin = new Button { Text = "Login", Width = 300 };
             lblMessage = new Label { ForeColor = System.Drawing.Color.Red, TextAlign = System.Drawing.ContentAlignment.MiddleCenter };
 
+            // Create the password visibility toggle button
+            btnTogglePasswordVisibility = new Button { Text = "👁️", Width = 40, TextAlign = System.Drawing.ContentAlignment.MiddleCenter };
+            btnTogglePasswordVisibility.Click += BtnTogglePasswordVisibility_Click;
+
             // Create a FlowLayoutPanel to arrange controls
             FlowLayoutPanel flowPanel = new FlowLayoutPanel
             {
@@ -44,10 +50,20 @@ namespace PasswordManager
                 Padding = new Padding(10)
             };
 
+            // Create a panel for the password field and toggle button
+            FlowLayoutPanel passwordPanel = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight
+            };
+            passwordPanel.Controls.Add(txtPassword);
+            passwordPanel.Controls.Add(btnTogglePasswordVisibility);
+
             // Add controls to the FlowLayoutPanel
             flowPanel.Controls.Add(lblMessage);
             flowPanel.Controls.Add(txtUsername);
-            flowPanel.Controls.Add(txtPassword);
+            flowPanel.Controls.Add(passwordPanel); // Add the password panel
             flowPanel.Controls.Add(btnLogin);
 
             // Add the FlowLayoutPanel to the form
@@ -98,6 +114,13 @@ namespace PasswordManager
             {
                 lblMessage.Text = "Invalid username or password.";
             }
+        }
+
+        private void BtnTogglePasswordVisibility_Click(object sender, EventArgs e)
+        {
+            isPasswordVisible = !isPasswordVisible; // Toggle visibility state
+            txtPassword.PasswordChar = isPasswordVisible ? '\0' : '*'; // Show or hide password
+            btnTogglePasswordVisibility.Text = isPasswordVisible ? "🙈" : "👁️"; // Update button icon
         }
     }
 }

@@ -1,63 +1,80 @@
 using System;
+using System.ComponentModel;
 using System.Windows.Forms;
 
 namespace PasswordManager
 {
     public class MainForm : Form
     {
-        private TextBox txtService;
-        private TextBox txtUsername;
-        private TextBox txtPassword;
-        private TextBox txtNotes;
-        private DataGridView dgvPasswords;
-        private TableLayoutPanel tableLayoutPanel;
+        private DataGridView dgvAccounts;
+        private BindingList<Account> accounts; // Use BindingList for automatic updates
+        private ContextMenuStrip contextMenu;
 
         public MainForm()
         {
-            // Initialize components
-            txtService = new TextBox { PlaceholderText = "Service Name", Dock = DockStyle.Fill };
-            txtUsername = new TextBox { PlaceholderText = "Username", Dock = DockStyle.Fill };
-            txtPassword = new TextBox { PlaceholderText = "Password", Dock = DockStyle.Fill, PasswordChar = '*' };
-            txtNotes = new TextBox { PlaceholderText = "Notes", Dock = DockStyle.Fill, Multiline = true, Height = 80 };
-            dgvPasswords = new DataGridView { Dock = DockStyle.Fill };
-
-            // Create TableLayoutPanel for better layout management
-            tableLayoutPanel = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                RowCount = 4, // Adjusted row count
-                AutoSize = true,
-                CellBorderStyle = TableLayoutPanelCellBorderStyle.Single
-            };
-
-            // Add controls to the TableLayoutPanel
-            tableLayoutPanel.Controls.Add(txtService, 0, 0);
-            tableLayoutPanel.Controls.Add(txtUsername, 0, 1);
-            tableLayoutPanel.Controls.Add(txtPassword, 0, 2);
-            tableLayoutPanel.Controls.Add(txtNotes, 0, 3);
-            tableLayoutPanel.SetColumnSpan(txtNotes, 2); // Span notes across two columns
-            tableLayoutPanel.SetColumnSpan(dgvPasswords, 2); // Span DataGridView across two columns
-
-            // Add TableLayoutPanel and DataGridView to the form
-            Controls.Add(tableLayoutPanel);
-            Controls.Add(dgvPasswords); // DataGridView at the bottom
-
-            // Set form properties
-            Text = "Password Manager";
-            Size = new System.Drawing.Size(1000, 600); // Set size to 1000x600
-            StartPosition = FormStartPosition.Manual; // Allow manual positioning
-            FormBorderStyle = FormBorderStyle.FixedDialog; // Prevent resizing
-            MaximizeBox = false; // Disable maximize button
-
-            // Event handlers
-            this.FormClosing += MainForm_FormClosing; // Handle form closing event
+            InitializeComponent();
+            InitializeDataGridView();
         }
 
-        // Handle form closing to stop the application
-        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        private void InitializeComponent()
         {
-            Application.Exit(); // Stop the application
+            this.dgvAccounts = new DataGridView();
+            this.contextMenu = new ContextMenuStrip();
+            this.contextMenu.Items.Add("Add Entry", null, AddEntry_Click);
+            this.dgvAccounts.ContextMenuStrip = this.contextMenu;
+
+            this.Controls.Add(this.dgvAccounts);
+            this.Text = "Password Manager";
+            this.Size = new System.Drawing.Size(800, 600);
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+        }
+
+        private void InitializeDataGridView()
+        {
+            accounts = new BindingList<Account>();
+            dgvAccounts.DataSource = accounts; // Set up DataGridView data binding
+            dgvAccounts.Dock = DockStyle.Fill;
+            dgvAccounts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        }
+
+        private void AddEntry_Click(object sender, EventArgs e)
+        {
+            using (var addEntryForm = new AddEntryForm())
+            {
+                if (addEntryForm.ShowDialog() == DialogResult.OK)
+                {
+                    var account = new Account
+                    {
+                        Service = addEntryForm.Service,
+                        Username = addEntryForm.Username,
+                        Password = addEntryForm.Password,
+                        Notes = addEntryForm.Notes
+                    };
+
+                    AddAccount(account); // Attempt to add account
+                }
+            }
+        }
+
+        private void AddAccount(Account account)
+        {
+            if (account != null)
+            {
+                try
+                {
+                    accounts.Add(account); // Add to BindingList
+                }
+                catch (InvalidOperationException ex)
+                {
+                    MessageBox.Show($"InvalidOperationException: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error adding account: {ex.Message}");
+                }
+            }
         }
     }
 }
