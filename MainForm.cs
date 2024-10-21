@@ -43,6 +43,12 @@ namespace PasswordManager
         {
             using (var addEntryForm = new AddEntryForm())
             {
+                // Get the current cursor position
+                var mousePos = Control.MousePosition;
+                addEntryForm.StartPosition = FormStartPosition.Manual; // Set to manual
+                addEntryForm.Location = new System.Drawing.Point(mousePos.X, mousePos.Y); // Position next to the cursor
+
+                // Show the form as a dialog
                 if (addEntryForm.ShowDialog() == DialogResult.OK)
                 {
                     var account = new Account
