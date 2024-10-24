@@ -246,6 +246,7 @@ namespace PasswordManager
             txtPassword.Text = GenerateRandomPassword(length); // Generate a password of selected length
             txtRepeatPassword.Enabled = false; // Disable repeat password textbox when regenerating
             isGeneratedPassword = true; // Set flag to indicate generated password
+            txtRepeatPassword.BackColor = System.Drawing.Color.White; // Reset color
         }
 
         private string GenerateRandomPassword(int length)

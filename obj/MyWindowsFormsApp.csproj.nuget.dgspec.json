@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "e:\\VS Projects\\Password_Manager\\MyWindowsFormsApp\\MyWindowsFormsApp.csproj": {}
+    "E:\\VS Projects\\Password_Manager\\MyWindowsFormsApp\\MyWindowsFormsApp.csproj": {}
   },
   "projects": {
-    "e:\\VS Projects\\Password_Manager\\MyWindowsFormsApp\\MyWindowsFormsApp.csproj": {
+    "E:\\VS Projects\\Password_Manager\\MyWindowsFormsApp\\MyWindowsFormsApp.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "e:\\VS Projects\\Password_Manager\\MyWindowsFormsApp\\MyWindowsFormsApp.csproj",
+        "projectUniqueName": "E:\\VS Projects\\Password_Manager\\MyWindowsFormsApp\\MyWindowsFormsApp.csproj",
         "projectName": "MyWindowsFormsApp",
-        "projectPath": "e:\\VS Projects\\Password_Manager\\MyWindowsFormsApp\\MyWindowsFormsApp.csproj",
+        "projectPath": "E:\\VS Projects\\Password_Manager\\MyWindowsFormsApp\\MyWindowsFormsApp.csproj",
         "packagesPath": "C:\\Users\\james\\.nuget\\packages\\",
-        "outputPath": "e:\\VS Projects\\Password_Manager\\MyWindowsFormsApp\\obj\\",
+        "outputPath": "E:\\VS Projects\\Password_Manager\\MyWindowsFormsApp\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\james\\AppData\\Roaming\\NuGet\\NuGet.Config"

@@ -33,7 +33,13 @@ namespace PasswordManager
             txtUsername = new TextBox { PlaceholderText = "Username", TextAlign = HorizontalAlignment.Center, Width = 300 };
             txtPassword = new TextBox { PlaceholderText = "Password", PasswordChar = '*', TextAlign = HorizontalAlignment.Center, Width = 300 };
             btnLogin = new Button { Text = "Login", Width = 300 };
-            lblMessage = new Label { ForeColor = System.Drawing.Color.Red, TextAlign = System.Drawing.ContentAlignment.MiddleCenter };
+            lblMessage = new Label 
+            { 
+                ForeColor = System.Drawing.Color.Red, 
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter, 
+                AutoSize = true, // Enable AutoSize
+                MaximumSize = new System.Drawing.Size(300, 0) // Set maximum width to prevent cutting off
+            };
 
             // Create the password visibility toggle button
             btnTogglePasswordVisibility = new Button { Text = "👁️", Width = 40, TextAlign = System.Drawing.ContentAlignment.MiddleCenter };
@@ -112,7 +118,7 @@ namespace PasswordManager
             }
             else
             {
-                lblMessage.Text = "Invalid username or password.";
+                lblMessage.Text = "Invalid username or password"; // Updated error message
             }
         }
 
