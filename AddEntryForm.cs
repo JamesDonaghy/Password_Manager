@@ -226,13 +226,53 @@ namespace PasswordManager
 
         private void BtnSave_Click(object sender, EventArgs e)
         {
-            Service = txtService.Text;
-            Username = txtUsername.Text;
+            if (!ValidateEntry())
+            {
+                return; // Stop here if validation fails; let the user correct the issue
+            }
+
+            Service = txtService.Text.Trim();
+            Username = txtUsername.Text.Trim();
             Password = txtPassword.Text;
             Notes = txtNotes.Text;
-            Url = txtUrl.Text; // Get URL from the new field
+            Url = txtUrl.Text.Trim(); // Get URL from the new field
             this.DialogResult = DialogResult.OK; // Indicate success
             this.Close();
+        }
+
+        private bool ValidateEntry()
+        {
+            if (string.IsNullOrWhiteSpace(txtService.Text))
+            {
+                MessageBox.Show("Please enter a service name.", "Missing Information", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtService.Focus();
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(txtUsername.Text))
+            {
+                MessageBox.Show("Please enter a username.", "Missing Information", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtUsername.Focus();
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(txtPassword.Text))
+            {
+                MessageBox.Show("Please enter or generate a password.", "Missing Information", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtPassword.Focus();
+                return false;
+            }
+
+            // The repeat password field is only enabled for manually-typed passwords
+            // (generated passwords disable it), so only enforce the match in that case.
+            if (txtRepeatPassword.Enabled && txtPassword.Text != txtRepeatPassword.Text)
+            {
+                MessageBox.Show("Passwords do not match. Please re-enter the repeat password.", "Password Mismatch", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtRepeatPassword.Focus();
+                return false;
+            }
+
+            return true;
         }
 
         private void ClearRepeatPassword()
