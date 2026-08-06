@@ -1,0 +1,10 @@
+# Build results
+bin/
+obj/
+
+# Visual Studio / VS Code workspace state
+.vs/
+
+# User-specific project files (machine-specific IDE settings)
+*.user
+*.suo
