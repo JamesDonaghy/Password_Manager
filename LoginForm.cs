@@ -13,11 +13,15 @@ namespace PasswordManager
         private Button btnTogglePasswordVisibility; // Button to toggle password visibility
         private bool isPasswordVisible = false; // Track visibility state
 
-        // In-memory user store for demonstration
-        private Dictionary<string, string> users = new Dictionary<string, string>
+        // In-memory credential store for demonstration. Passwords are hashed with PBKDF2
+        // (see PasswordHasher) rather than kept in plain text. This mirrors how credentials
+        // would look once loaded from a persisted store - the login logic below reads the
+        // same way regardless of where the hashes ultimately come from.
+        // TODO: Replace with a persisted credential store once account persistence is added.
+        private readonly Dictionary<string, string> userCredentials = new Dictionary<string, string>
         {
-            { "admin", "password" }, // Replace with secure storage in production
-            { "user1", "pass123" }
+            { "admin", PasswordHasher.HashPassword("password") },
+            { "user1", PasswordHasher.HashPassword("pass123") }
         };
 
         public LoginForm()
@@ -100,8 +104,9 @@ namespace PasswordManager
 
         private void BtnLogin_Click(object sender, EventArgs e)
         {
-            // Validate credentials
-            if (users.TryGetValue(txtUsername.Text, out var password) && password == txtPassword.Text)
+            // Validate credentials: look up the stored hash for this username, then verify
+            // the entered password against it (see PasswordHasher for how hashing works).
+            if (userCredentials.TryGetValue(txtUsername.Text, out var storedHash) && PasswordHasher.VerifyPassword(txtPassword.Text, storedHash))
             {
                 lblMessage.Text = "";
 
