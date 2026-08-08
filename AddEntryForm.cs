@@ -164,6 +164,7 @@ namespace PasswordManager
                 Text = "Edit Entry";
                 txtService.Text = existingAccount.Service;
                 txtUsername.Text = existingAccount.Username;
+                txtUrl.Text = existingAccount.Url;
                 txtNotes.Text = existingAccount.Notes;
                 txtPassword.Text = existingAccount.Password;
                 txtRepeatPassword.Text = existingAccount.Password;

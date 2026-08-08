@@ -76,6 +76,7 @@ namespace PasswordManager
                         Service = addEntryForm.Service,
                         Username = addEntryForm.Username,
                         Password = addEntryForm.Password,
+                        Url = addEntryForm.Url,
                         Notes = addEntryForm.Notes
                     };
 
@@ -138,6 +139,7 @@ namespace PasswordManager
                     selectedAccount.Service = editEntryForm.Service;
                     selectedAccount.Username = editEntryForm.Username;
                     selectedAccount.Password = editEntryForm.Password;
+                    selectedAccount.Url = editEntryForm.Url;
                     selectedAccount.Notes = editEntryForm.Notes;
 
                     accounts.ResetItem(accounts.IndexOf(selectedAccount)); // Refresh the grid row to show the updated values
