@@ -34,7 +34,7 @@ namespace PasswordManager
         private bool includeNumbers = true; // Track inclusion of numbers
         private bool isGeneratedPassword = false; // Track if using a generated password
 
-        public AddEntryForm()
+        public AddEntryForm(Account existingAccount = null)
         {
             // Set fixed size
             this.Size = new System.Drawing.Size(700, 600);
@@ -154,6 +154,20 @@ namespace PasswordManager
 
             // Set the Load event handler
             this.Load += AddEntryForm_Load;
+
+            // If editing an existing account, pre-fill the form and switch to edit mode.
+            // Setting txtPassword.Text here also triggers TxtPassword_TextChanged, which
+            // enables the repeat-password field; we then pre-fill that too so saving without
+            // changing the password works immediately, same as if the user had retyped it.
+            if (existingAccount != null)
+            {
+                Text = "Edit Entry";
+                txtService.Text = existingAccount.Service;
+                txtUsername.Text = existingAccount.Username;
+                txtNotes.Text = existingAccount.Notes;
+                txtPassword.Text = existingAccount.Password;
+                txtRepeatPassword.Text = existingAccount.Password;
+            }
         }
 
         private void AddEntryForm_Load(object sender, EventArgs e)
