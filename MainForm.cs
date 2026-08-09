@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows.Forms;
 
@@ -11,6 +12,13 @@ namespace PasswordManager
         private ContextMenuStrip contextMenu;
         private ToolStripMenuItem editEntryMenuItem;
         private ToolStripMenuItem deleteEntryMenuItem;
+        private ToolStripMenuItem togglePasswordMenuItem;
+
+        // Tracks which accounts currently have their password shown in the grid.
+        // Reference equality (the default for a class with no overridden Equals) is exactly
+        // what we want here - each Account is a distinct object, so this only tracks the
+        // specific rows the user has chosen to reveal, not accounts with equal-looking data.
+        private readonly HashSet<Account> revealedPasswords = new HashSet<Account>();
 
         public MainForm()
         {
@@ -25,13 +33,17 @@ namespace PasswordManager
             this.contextMenu.Items.Add("Add Entry", null, AddEntry_Click);
             this.editEntryMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Edit Entry", null, EditEntry_Click);
             this.deleteEntryMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Delete Entry", null, DeleteEntry_Click);
-            this.contextMenu.Opening += ContextMenu_Opening; // Enable/disable Edit and Delete based on whether a row is selected
+            this.togglePasswordMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Show Password", null, TogglePasswordVisibility_Click);
+            this.contextMenu.Opening += ContextMenu_Opening; // Enable/disable menu items based on whether a row is selected
             this.dgvAccounts.ContextMenuStrip = this.contextMenu;
 
             // Right-clicking a row doesn't select it by default in a DataGridView, so without
             // this, Edit/Delete could act on whatever row was last left-clicked instead of the
             // one the user just right-clicked.
             this.dgvAccounts.CellMouseDown += DgvAccounts_CellMouseDown;
+
+            // Masks the Password column's displayed text unless the row has been revealed.
+            this.dgvAccounts.CellFormatting += DgvAccounts_CellFormatting;
 
             this.Controls.Add(this.dgvAccounts);
             this.Text = "Password Manager";
@@ -116,9 +128,48 @@ namespace PasswordManager
 
         private void ContextMenu_Opening(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            bool hasSelection = dgvAccounts.CurrentRow?.DataBoundItem is Account;
+            var selectedAccount = dgvAccounts.CurrentRow?.DataBoundItem as Account;
+            bool hasSelection = selectedAccount != null;
+
             editEntryMenuItem.Enabled = hasSelection;
             deleteEntryMenuItem.Enabled = hasSelection;
+            togglePasswordMenuItem.Enabled = hasSelection;
+            togglePasswordMenuItem.Text = hasSelection && revealedPasswords.Contains(selectedAccount)
+                ? "Hide Password"
+                : "Show Password";
+        }
+
+        private void DgvAccounts_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (dgvAccounts.Columns[e.ColumnIndex].Name != nameof(Account.Password))
+            {
+                return;
+            }
+
+            if (!(dgvAccounts.Rows[e.RowIndex].DataBoundItem is Account account) || revealedPasswords.Contains(account))
+            {
+                return; // Either not a real data row, or this row has been revealed - show the real value
+            }
+
+            // Fixed-length mask regardless of the actual password's length, so the mask
+            // itself doesn't leak how long the real password is.
+            e.Value = "••••••••";
+            e.FormattingApplied = true;
+        }
+
+        private void TogglePasswordVisibility_Click(object sender, EventArgs e)
+        {
+            if (!(dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount))
+            {
+                return;
+            }
+
+            if (!revealedPasswords.Remove(selectedAccount))
+            {
+                revealedPasswords.Add(selectedAccount);
+            }
+
+            dgvAccounts.InvalidateRow(dgvAccounts.CurrentRow.Index); // Force this row's cells to re-format
         }
 
         private void EditEntry_Click(object sender, EventArgs e)
@@ -163,6 +214,7 @@ namespace PasswordManager
             if (confirmResult == DialogResult.Yes)
             {
                 accounts.Remove(selectedAccount);
+                revealedPasswords.Remove(selectedAccount);
             }
         }
     }
