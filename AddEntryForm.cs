@@ -317,14 +317,15 @@ namespace PasswordManager
                 validChars.Append(symbols);
 
             StringBuilder result = new StringBuilder();
-            using (var rng = new RNGCryptoServiceProvider())
+            for (int i = 0; i < length; i++)
             {
-                byte[] data = new byte[length];
-                rng.GetBytes(data);
-                for (int i = 0; i < length; i++)
-                {
-                    result.Append(validChars[data[i] % validChars.Length]);
-                }
+                // RandomNumberGenerator.GetInt32 is the modern replacement for
+                // RNGCryptoServiceProvider (now obsolete). It's also unbiased: the previous
+                // "random byte % validChars.Length" approach slightly favored characters
+                // near the start of validChars, since 256 doesn't divide evenly into most
+                // charset lengths. GetInt32 picks uniformly from [0, validChars.Length).
+                int index = RandomNumberGenerator.GetInt32(validChars.Length);
+                result.Append(validChars[index]);
             }
             return result.ToString();
         }
