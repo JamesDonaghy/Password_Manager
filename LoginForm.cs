@@ -1,46 +1,40 @@
 using System;
-using System.Collections.Generic;
 using System.Windows.Forms;
 
 namespace PasswordManager
 {
     public class LoginForm : Form
     {
-        private TextBox txtUsername;
         private TextBox txtPassword;
+        private TextBox txtRepeatPassword; // Only shown/used during first-run master password setup
         private Button btnLogin;
         private Label lblMessage;
         private Button btnTogglePasswordVisibility; // Button to toggle password visibility
         private bool isPasswordVisible = false; // Track visibility state
 
-        // In-memory credential store for demonstration. Passwords are hashed with PBKDF2
-        // (see PasswordHasher) rather than kept in plain text. This mirrors how credentials
-        // would look once loaded from a persisted store - the login logic below reads the
-        // same way regardless of where the hashes ultimately come from.
-        // TODO: Replace with a persisted credential store once account persistence is added.
-        private readonly Dictionary<string, string> userCredentials = new Dictionary<string, string>
-        {
-            { "admin", PasswordHasher.HashPassword("password") },
-            { "user1", PasswordHasher.HashPassword("pass123") }
-        };
+        // If no master password has been set up yet on this machine, the form switches
+        // into "create a master password" mode instead of "log in" mode.
+        private readonly bool isFirstRunSetup;
 
         public LoginForm()
         {
+            isFirstRunSetup = !CredentialStore.CredentialExists();
+
             // Set form properties
-            this.Text = "Login";
+            this.Text = isFirstRunSetup ? "Set Up Master Password" : "Login";
             this.Size = new System.Drawing.Size(1000, 600); // Set size to 1000x600
             this.FormBorderStyle = FormBorderStyle.FixedDialog; // Prevent resizing
             this.MaximizeBox = false; // Disable maximize button
             this.StartPosition = FormStartPosition.CenterScreen; // Center on screen
 
             // Initialize components
-            txtUsername = new TextBox { PlaceholderText = "Username", TextAlign = HorizontalAlignment.Center, Width = 300 };
-            txtPassword = new TextBox { PlaceholderText = "Password", PasswordChar = '*', TextAlign = HorizontalAlignment.Center, Width = 300 };
-            btnLogin = new Button { Text = "Login", Width = 300 };
-            lblMessage = new Label 
-            { 
-                ForeColor = System.Drawing.Color.Red, 
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter, 
+            txtPassword = new TextBox { PlaceholderText = "Master Password", PasswordChar = '*', TextAlign = HorizontalAlignment.Center, Width = 300 };
+            txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Master Password", PasswordChar = '*', TextAlign = HorizontalAlignment.Center, Width = 300, Visible = isFirstRunSetup };
+            btnLogin = new Button { Text = isFirstRunSetup ? "Create Master Password" : "Login", Width = 300 };
+            lblMessage = new Label
+            {
+                ForeColor = System.Drawing.Color.Red,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 AutoSize = true, // Enable AutoSize
                 MaximumSize = new System.Drawing.Size(300, 0) // Set maximum width to prevent cutting off
             };
@@ -72,8 +66,26 @@ namespace PasswordManager
 
             // Add controls to the FlowLayoutPanel
             flowPanel.Controls.Add(lblMessage);
-            flowPanel.Controls.Add(txtUsername);
+
+            if (isFirstRunSetup)
+            {
+                var introLabel = new Label
+                {
+                    Text = "No master password is set up on this device yet.\nChoose one to secure your vault.",
+                    TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                    AutoSize = true,
+                    MaximumSize = new System.Drawing.Size(300, 0)
+                };
+                flowPanel.Controls.Add(introLabel);
+            }
+
             flowPanel.Controls.Add(passwordPanel); // Add the password panel
+
+            if (isFirstRunSetup)
+            {
+                flowPanel.Controls.Add(txtRepeatPassword);
+            }
+
             flowPanel.Controls.Add(btnLogin);
 
             // Add the FlowLayoutPanel to the form
@@ -84,12 +96,14 @@ namespace PasswordManager
             flowPanel.Left = (this.ClientSize.Width - flowPanel.Width) / 2;
             flowPanel.Top = (this.ClientSize.Height - flowPanel.Height) / 2;
 
-            // Set event for button click
-            btnLogin.Click += BtnLogin_Click;
+            // Set event for button click - which handler runs depends on whether we're
+            // setting up a master password for the first time or logging in with one
+            // that already exists.
+            btnLogin.Click += isFirstRunSetup ? (EventHandler)BtnCreateMasterPassword_Click : BtnLogin_Click;
 
             // Handle key down event for text boxes
-            txtUsername.KeyDown += TextBox_KeyDown;
             txtPassword.KeyDown += TextBox_KeyDown;
+            txtRepeatPassword.KeyDown += TextBox_KeyDown;
         }
 
         private void TextBox_KeyDown(object sender, KeyEventArgs e)
@@ -98,15 +112,34 @@ namespace PasswordManager
             {
                 // Prevent the sound by marking the event as handled
                 e.SuppressKeyPress = true;
-                BtnLogin_Click(sender, e);
+
+                if (isFirstRunSetup)
+                {
+                    BtnCreateMasterPassword_Click(sender, e);
+                }
+                else
+                {
+                    BtnLogin_Click(sender, e);
+                }
             }
         }
 
         private void BtnLogin_Click(object sender, EventArgs e)
         {
-            // Validate credentials: look up the stored hash for this username, then verify
-            // the entered password against it (see PasswordHasher for how hashing works).
-            if (userCredentials.TryGetValue(txtUsername.Text, out var storedHash) && PasswordHasher.VerifyPassword(txtPassword.Text, storedHash))
+            string storedHash;
+            try
+            {
+                storedHash = CredentialStore.LoadMasterPasswordHash();
+            }
+            catch (Exception ex)
+            {
+                lblMessage.Text = $"Could not read your saved master password: {ex.Message}";
+                return;
+            }
+
+            // Verify the entered password against the stored hash (see PasswordHasher for
+            // how hashing/verification works).
+            if (PasswordHasher.VerifyPassword(txtPassword.Text, storedHash))
             {
                 lblMessage.Text = "";
 
@@ -123,14 +156,60 @@ namespace PasswordManager
             }
             else
             {
-                lblMessage.Text = "Invalid username or password"; // Updated error message
+                lblMessage.Text = "Incorrect master password";
             }
+        }
+
+        private void BtnCreateMasterPassword_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(txtPassword.Text))
+            {
+                lblMessage.Text = "Please enter a master password.";
+                return;
+            }
+
+            if (txtPassword.Text.Length < 8)
+            {
+                lblMessage.Text = "Master password must be at least 8 characters.";
+                return;
+            }
+
+            if (txtPassword.Text != txtRepeatPassword.Text)
+            {
+                lblMessage.Text = "Passwords do not match.";
+                return;
+            }
+
+            try
+            {
+                CredentialStore.SaveMasterPasswordHash(PasswordHasher.HashPassword(txtPassword.Text));
+            }
+            catch (Exception ex)
+            {
+                lblMessage.Text = $"Could not save your master password: {ex.Message}";
+                return;
+            }
+
+            lblMessage.Text = "";
+
+            // Proceed straight into the app now that the master password is set up,
+            // rather than making the user immediately re-enter it to log in again.
+            MainForm mainForm = new MainForm
+            {
+                Size = this.Size,
+                StartPosition = FormStartPosition.Manual,
+                Location = this.Location
+            };
+
+            mainForm.Show();
+            this.Hide();
         }
 
         private void BtnTogglePasswordVisibility_Click(object sender, EventArgs e)
         {
             isPasswordVisible = !isPasswordVisible; // Toggle visibility state
             txtPassword.PasswordChar = isPasswordVisible ? '\0' : '*'; // Show or hide password
+            txtRepeatPassword.PasswordChar = isPasswordVisible ? '\0' : '*'; // Show or hide repeat password
             btnTogglePasswordVisibility.Text = isPasswordVisible ? "🙈" : "👁️"; // Update button icon
         }
     }
