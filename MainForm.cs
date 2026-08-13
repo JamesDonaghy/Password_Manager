@@ -20,8 +20,13 @@ namespace PasswordManager
         // specific rows the user has chosen to reveal, not accounts with equal-looking data.
         private readonly HashSet<Account> revealedPasswords = new HashSet<Account>();
 
-        public MainForm()
+        // Needed to derive the vault's encryption key (see VaultStorage). Kept only in
+        // memory for the lifetime of this form - never written to disk anywhere.
+        private readonly string masterPassword;
+
+        public MainForm(string masterPassword)
         {
+            this.masterPassword = masterPassword;
             InitializeComponent();
             InitializeDataGridView();
         }
@@ -55,7 +60,28 @@ namespace PasswordManager
 
         private void InitializeDataGridView()
         {
-            accounts = new BindingList<Account>();
+            List<Account> loadedAccounts;
+            try
+            {
+                loadedAccounts = VaultStorage.LoadVault(masterPassword);
+            }
+            catch (Exception ex)
+            {
+                // A corrupted/tampered file or a decryption failure both surface here as an
+                // exception. There's no recovery mechanism by design, so we fall back to an
+                // empty vault rather than crashing - but this does mean the user's previous
+                // entries are effectively gone, which is why we tell them clearly.
+                MessageBox.Show(
+                    $"Your saved vault could not be opened, so it's starting empty: {ex.Message}",
+                    "Vault Load Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                loadedAccounts = new List<Account>();
+            }
+
+            accounts = new BindingList<Account>(loadedAccounts);
+            accounts.ListChanged += Accounts_ListChanged; // Persist the vault after every Add/Edit/Delete
+
             dgvAccounts.DataSource = accounts; // Set up DataGridView data binding
             dgvAccounts.Dock = DockStyle.Fill;
             dgvAccounts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
@@ -69,6 +95,21 @@ namespace PasswordManager
             dgvAccounts.AllowUserToAddRows = false;
             dgvAccounts.AllowUserToDeleteRows = false;
             dgvAccounts.ReadOnly = true;
+        }
+
+        private void Accounts_ListChanged(object sender, ListChangedEventArgs e)
+        {
+            // Fires for every Add, Delete, and ResetItem (used by Edit) on the BindingList,
+            // so saving here covers all three without needing a separate save call in each
+            // click handler.
+            try
+            {
+                VaultStorage.SaveVault(new List<Account>(accounts), masterPassword);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not save your vault: {ex.Message}", "Vault Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void AddEntry_Click(object sender, EventArgs e)

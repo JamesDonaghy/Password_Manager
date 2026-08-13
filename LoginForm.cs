@@ -144,7 +144,7 @@ namespace PasswordManager
                 lblMessage.Text = "";
 
                 // Create and show MainForm with the same size and position
-                MainForm mainForm = new MainForm
+                MainForm mainForm = new MainForm(txtPassword.Text)
                 {
                     Size = this.Size, // Set size to 1000x600
                     StartPosition = FormStartPosition.Manual,
@@ -194,7 +194,7 @@ namespace PasswordManager
 
             // Proceed straight into the app now that the master password is set up,
             // rather than making the user immediately re-enter it to log in again.
-            MainForm mainForm = new MainForm
+            MainForm mainForm = new MainForm(txtPassword.Text)
             {
                 Size = this.Size,
                 StartPosition = FormStartPosition.Manual,
