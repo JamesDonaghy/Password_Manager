@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace PasswordManager
@@ -21,8 +22,10 @@ namespace PasswordManager
         private readonly HashSet<Account> revealedPasswords = new HashSet<Account>();
 
         // Needed to derive the vault's encryption key (see VaultStorage). Kept only in
-        // memory for the lifetime of this form - never written to disk anywhere.
-        private readonly string masterPassword;
+        // memory for the lifetime of this form - never written to disk anywhere. Not
+        // readonly: ChangeMasterPassword_Click updates it after a successful change so
+        // later auto-saves use the new key.
+        private string masterPassword;
 
         public MainForm(string masterPassword)
         {
@@ -39,6 +42,8 @@ namespace PasswordManager
             this.editEntryMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Edit Entry", null, EditEntry_Click);
             this.deleteEntryMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Delete Entry", null, DeleteEntry_Click);
             this.togglePasswordMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Show Password", null, TogglePasswordVisibility_Click);
+            this.contextMenu.Items.Add(new ToolStripSeparator()); // Visually separate row actions from app-level actions
+            this.contextMenu.Items.Add("Change Master Password", null, ChangeMasterPassword_Click); // Always available, doesn't depend on row selection
             this.contextMenu.Opening += ContextMenu_Opening; // Enable/disable menu items based on whether a row is selected
             this.dgvAccounts.ContextMenuStrip = this.contextMenu;
 
@@ -114,7 +119,7 @@ namespace PasswordManager
 
         private void AddEntry_Click(object sender, EventArgs e)
         {
-            using (var addEntryForm = new AddEntryForm())
+            using (var addEntryForm = new AddEntryForm(knownUsernames: accounts.Select(a => a.Username)))
             {
                 // Get the current cursor position
                 var mousePos = Control.MousePosition;
@@ -220,7 +225,7 @@ namespace PasswordManager
                 return;
             }
 
-            using (var editEntryForm = new AddEntryForm(selectedAccount))
+            using (var editEntryForm = new AddEntryForm(selectedAccount, accounts.Select(a => a.Username)))
             {
                 var mousePos = Control.MousePosition;
                 editEntryForm.StartPosition = FormStartPosition.Manual;
@@ -256,6 +261,38 @@ namespace PasswordManager
             {
                 accounts.Remove(selectedAccount);
                 revealedPasswords.Remove(selectedAccount);
+            }
+        }
+
+        private void ChangeMasterPassword_Click(object sender, EventArgs e)
+        {
+            using (var changeForm = new ChangeMasterPasswordForm())
+            {
+                var mousePos = Control.MousePosition;
+                changeForm.StartPosition = FormStartPosition.Manual;
+                changeForm.Location = new System.Drawing.Point(mousePos.X, mousePos.Y);
+
+                if (changeForm.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
+
+                try
+                {
+                    // Re-encrypt the vault with the new password first. If this throws, the
+                    // credential file below is never touched, so the old password keeps
+                    // working for both login and vault decryption - the two can't end up
+                    // out of sync with each other.
+                    VaultStorage.SaveVault(new List<Account>(accounts), changeForm.NewPassword);
+                    CredentialStore.SaveMasterPasswordHash(PasswordHasher.HashPassword(changeForm.NewPassword));
+                    masterPassword = changeForm.NewPassword; // Future auto-saves this session should use the new key too
+
+                    MessageBox.Show("Master password changed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not change your master password: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
     }

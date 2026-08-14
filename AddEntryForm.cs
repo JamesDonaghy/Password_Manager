@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
@@ -34,7 +36,7 @@ namespace PasswordManager
         private bool includeNumbers = true; // Track inclusion of numbers
         private bool isGeneratedPassword = false; // Track if using a generated password
 
-        public AddEntryForm(Account existingAccount = null)
+        public AddEntryForm(Account existingAccount = null, IEnumerable<string> knownUsernames = null)
         {
             // Set fixed size
             this.Size = new System.Drawing.Size(700, 600);
@@ -51,6 +53,19 @@ namespace PasswordManager
 
             txtService = new TextBox { PlaceholderText = "Service Name", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font };
             txtUsername = new TextBox { PlaceholderText = "Username", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font };
+
+            // Suggest usernames/emails already used elsewhere in the vault as the user types.
+            // AutoCompleteStringCollection needs distinct, non-empty entries - duplicates or
+            // blanks would just clutter the suggestion list without adding anything useful.
+            txtUsername.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+            txtUsername.AutoCompleteSource = AutoCompleteSource.CustomSource;
+            var usernameSuggestions = new AutoCompleteStringCollection();
+            if (knownUsernames != null)
+            {
+                usernameSuggestions.AddRange(knownUsernames.Where(u => !string.IsNullOrWhiteSpace(u)).Distinct().ToArray());
+            }
+            txtUsername.AutoCompleteCustomSource = usernameSuggestions;
+
             txtPassword = new TextBox { PlaceholderText = "Password", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, PasswordChar = '*', Font = font };
             txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Password", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, PasswordChar = '*', Font = font, Enabled = false }; // Repeat password field disabled by default
             txtUrl = new TextBox { PlaceholderText = "URL", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font }; // URL field
@@ -71,7 +86,7 @@ namespace PasswordManager
                 Width = 300, // Make the slider wider
                 Visible = false // Initially hidden
             };
-            sliderPasswordLength.Scroll += (s, e) => 
+            sliderPasswordLength.Scroll += (s, e) =>
             {
                 lblCurrentLength.Text = sliderPasswordLength.Value.ToString(); // Update current length label
                 RegeneratePassword(); // Regenerate password when slider changes
@@ -79,12 +94,12 @@ namespace PasswordManager
 
             // Toggle button for showing/hiding the length slider with an icon
             btnToggleLengthSlider = new Button { Text = "🔧", Width = buttonWidth, Height = buttonHeight, Font = font, BackColor = System.Drawing.Color.LightBlue }; // Wrench icon
-            btnToggleLengthSlider.Click += (sender, e) => 
+            btnToggleLengthSlider.Click += (sender, e) =>
             {
                 sliderPasswordLength.Visible = !sliderPasswordLength.Visible;
 
                 // Only show current length label when slider is visible
-                lblCurrentLength.Visible = sliderPasswordLength.Visible; 
+                lblCurrentLength.Visible = sliderPasswordLength.Visible;
                 if (sliderPasswordLength.Visible)
                 {
                     lblCurrentLength.Text = sliderPasswordLength.Value.ToString(); // Show the current length when the slider is displayed
