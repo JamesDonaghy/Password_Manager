@@ -68,14 +68,27 @@ namespace PasswordManager
             List<Account> loadedAccounts;
             try
             {
-                loadedAccounts = VaultStorage.LoadVault(masterPassword);
+                loadedAccounts = VaultStorage.LoadVault(masterPassword, out bool loadedFromBackup);
+
+                if (loadedFromBackup)
+                {
+                    // The primary vault file failed to decrypt but the backup left behind by
+                    // the last save worked, so we recovered - but anything changed since that
+                    // backup was written (i.e. the most recent save) won't be reflected here.
+                    MessageBox.Show(
+                        "Your main vault file couldn't be opened, so it was recovered from a backup. " +
+                        "Any changes made in your very last session may be missing.",
+                        "Vault Recovered From Backup",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
             }
             catch (Exception ex)
             {
-                // A corrupted/tampered file or a decryption failure both surface here as an
-                // exception. There's no recovery mechanism by design, so we fall back to an
-                // empty vault rather than crashing - but this does mean the user's previous
-                // entries are effectively gone, which is why we tell them clearly.
+                // Neither the primary vault file nor its backup could be decrypted. There's
+                // no further recovery mechanism by design, so we fall back to an empty vault
+                // rather than crashing - but this does mean the user's previous entries are
+                // effectively gone, which is why we tell them clearly.
                 MessageBox.Show(
                     $"Your saved vault could not be opened, so it's starting empty: {ex.Message}",
                     "Vault Load Error",

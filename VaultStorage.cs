@@ -7,7 +7,6 @@ using System.Text.Json;
 
 namespace PasswordManager
 {
-    /// <summary>
     /// Encrypts and persists the account vault to a file in the user's AppData folder,
     /// using a key derived from the master password. Uses AES-GCM (authenticated
     /// encryption), so a corrupted or tampered file fails decryption loudly instead of
@@ -17,7 +16,6 @@ namespace PasswordManager
     /// every save. This is deliberately simple: because the key itself changes every time,
     /// there is no risk of ever reusing the same (key, nonce) pair, which is the one hard
     /// requirement AES-GCM depends on for its security guarantees.
-    /// </summary>
     public static class VaultStorage
     {
         private const int SaltSizeBytes = 16;   // 128-bit salt for key derivation
@@ -31,23 +29,61 @@ namespace PasswordManager
             "PasswordManager",
             "vault.dat");
 
+        // Written as a side effect of SaveVault's atomic File.Replace - see below.
+        private static readonly string VaultBackupFilePath = VaultFilePath + ".bak";
+
         public static bool VaultExists()
         {
             return File.Exists(VaultFilePath);
         }
 
-        /// <summary>
         /// Loads and decrypts the vault. Returns an empty list if no vault file exists yet
         /// (e.g. right after first setting up a master password).
-        /// </summary>
-        public static List<Account> LoadVault(string masterPassword)
+        ///
+        /// If the primary vault file can't be decrypted (corrupted, tampered with, or an
+        /// interrupted write that somehow got past SaveVault's atomic swap), this falls
+        /// back to the .bak file left behind by the previous save, rather than giving up
+        /// and returning an empty vault straight away. loadedFromBackup tells the caller
+        /// this happened, so the user can be told their data may be one save behind rather
+        /// than silently trusting it's current.
+        public static List<Account> LoadVault(string masterPassword, out bool loadedFromBackup)
         {
+            loadedFromBackup = false;
+
             if (!VaultExists())
             {
                 return new List<Account>();
             }
 
-            byte[] fileBytes = File.ReadAllBytes(VaultFilePath);
+            try
+            {
+                return DecryptVaultFile(VaultFilePath, masterPassword);
+            }
+            catch (Exception primaryEx)
+            {
+                if (!File.Exists(VaultBackupFilePath))
+                {
+                    throw;
+                }
+
+                try
+                {
+                    List<Account> accounts = DecryptVaultFile(VaultBackupFilePath, masterPassword);
+                    loadedFromBackup = true;
+                    return accounts;
+                }
+                catch (Exception)
+                {
+                    // Backup didn't work either - surface the original failure, since that's
+                    // the file the user actually expected to be loaded.
+                    throw primaryEx;
+                }
+            }
+        }
+
+        private static List<Account> DecryptVaultFile(string filePath, string masterPassword)
+        {
+            byte[] fileBytes = File.ReadAllBytes(filePath);
 
             int headerLength = SaltSizeBytes + NonceSizeBytes + TagSizeBytes;
             if (fileBytes.Length <= headerLength)
@@ -75,9 +111,7 @@ namespace PasswordManager
             return JsonSerializer.Deserialize<List<Account>>(json) ?? new List<Account>();
         }
 
-        /// <summary>
         /// Encrypts and saves the given account list, overwriting any previous vault file.
-        /// </summary>
         public static void SaveVault(List<Account> accounts, string masterPassword)
         {
             string directory = Path.GetDirectoryName(VaultFilePath);
@@ -123,9 +157,9 @@ namespace PasswordManager
             if (File.Exists(VaultFilePath))
             {
                 // File.Replace performs the swap as a single atomic filesystem operation,
-                // taking a backup of the previous version along the way.
-                string backupFilePath = VaultFilePath + ".bak";
-                File.Replace(tempFilePath, VaultFilePath, backupFilePath);
+                // taking a backup of the previous version along the way. LoadVault falls
+                // back to this backup if the primary file ever fails to decrypt.
+                File.Replace(tempFilePath, VaultFilePath, VaultBackupFilePath);
             }
             else
             {
