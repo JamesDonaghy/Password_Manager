@@ -66,6 +66,10 @@ namespace PasswordManager
             // Masks the Password column's displayed text unless the row has been revealed.
             this.dgvAccounts.CellFormatting += DgvAccounts_CellFormatting;
 
+            // If a copied password is still sitting on the clipboard when the app closes,
+            // the auto-clear timer never gets the chance to fire - clear it here instead.
+            this.FormClosing += MainForm_FormClosing;
+
             this.Controls.Add(this.dgvAccounts);
             this.Text = "Password Manager";
             this.Size = new System.Drawing.Size(800, 600);
@@ -270,6 +274,21 @@ namespace PasswordManager
         private void ClipboardClearTimer_Tick(object sender, EventArgs e)
         {
             clipboardClearTimer.Stop(); // Only clear once per copy, not repeatedly
+            ClearClipboardIfStillCopied();
+        }
+
+        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            clipboardClearTimer.Stop();
+            ClearClipboardIfStillCopied();
+        }
+
+        private void ClearClipboardIfStillCopied()
+        {
+            if (lastCopiedPassword == null)
+            {
+                return;
+            }
 
             try
             {
@@ -282,7 +301,8 @@ namespace PasswordManager
             }
             catch (Exception)
             {
-                // Background cleanup step - not worth interrupting the user if it fails.
+                // Best-effort cleanup, whether from the timer or on the way out - not worth
+                // interrupting the user (or blocking shutdown) over this failing.
             }
 
             lastCopiedPassword = null;
