@@ -26,11 +26,6 @@ namespace PasswordManager
         private TrackBar sliderPasswordLength; // Slider for password length
         private Label lblCurrentLength; // Label to show current length
 
-        // Usernames already saved elsewhere in the vault, passed in by MainForm. Kept as a
-        // field (rather than only used once in the constructor) so RefreshUsernameSuggestions
-        // can recombine it with the curated list after the user edits that list.
-        private readonly IEnumerable<string> knownUsernames;
-
         public string Service { get; private set; }
         public string Username { get; private set; }
         public string Password { get; private set; }
@@ -42,7 +37,7 @@ namespace PasswordManager
         private bool includeNumbers = true; // Track inclusion of numbers
         private bool isGeneratedPassword = false; // Track if using a generated password
 
-        public AddEntryForm(Account existingAccount = null, IEnumerable<string> knownUsernames = null)
+        public AddEntryForm(Account existingAccount = null)
         {
             // Set fixed size
             this.Size = new System.Drawing.Size(700, 600);
@@ -59,8 +54,7 @@ namespace PasswordManager
 
             txtService = new TextBox { PlaceholderText = "Service Name", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font };
             txtUsername = new TextBox { PlaceholderText = "Username", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font };
-            this.knownUsernames = knownUsernames;
-            RefreshUsernameSuggestions(); // Builds suggestions from knownUsernames + the curated list
+            RefreshUsernameSuggestions(); // Builds suggestions from UsernameSuggestionsStore
 
             btnManageUsernames = new Button { Text = "👤", Width = buttonWidth, Height = buttonHeight, Font = font }; // Manage suggested usernames
             btnManageUsernames.Click += BtnManageUsernames_Click;
@@ -359,28 +353,22 @@ namespace PasswordManager
 
         private void RefreshUsernameSuggestions()
         {
-            List<string> curatedUsernames;
+            List<string> suggestions;
             try
             {
-                curatedUsernames = UsernameSuggestionsStore.LoadUsernames();
+                suggestions = UsernameSuggestionsStore.LoadUsernames();
             }
             catch (Exception)
             {
                 // Suggestions are a convenience, not core functionality - a bad file here
-                // shouldn't block using the form, just fall back to accounts-only suggestions.
-                curatedUsernames = new List<string>();
+                // shouldn't block using the form, just fall back to no suggestions.
+                suggestions = new List<string>();
             }
 
-            // Combine usernames already saved to the vault with the manually-curated list.
             // AutoCompleteStringCollection needs distinct, non-empty entries - duplicates or
             // blanks would just clutter the suggestion list without adding anything useful.
-            var combined = (knownUsernames ?? Enumerable.Empty<string>())
-                .Concat(curatedUsernames)
-                .Where(u => !string.IsNullOrWhiteSpace(u))
-                .Distinct();
-
             var usernameSuggestions = new AutoCompleteStringCollection();
-            usernameSuggestions.AddRange(combined.ToArray());
+            usernameSuggestions.AddRange(suggestions.Where(u => !string.IsNullOrWhiteSpace(u)).Distinct().ToArray());
 
             txtUsername.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
             txtUsername.AutoCompleteSource = AutoCompleteSource.CustomSource;

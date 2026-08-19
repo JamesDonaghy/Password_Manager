@@ -113,6 +113,22 @@ namespace PasswordManager
             }
 
             accounts = new BindingList<Account>(loadedAccounts);
+
+            try
+            {
+                // Backfill: make sure every username already in the vault is captured as a
+                // suggestion. Only matters the first time this runs after upgrading, since
+                // AddEntry_Click/EditEntry_Click keep the store up to date from here on -
+                // but harmless to call every time, since UpsertUsernames only writes when
+                // something's actually new.
+                UsernameSuggestionsStore.UpsertUsernames(loadedAccounts.Select(a => a.Username));
+            }
+            catch (Exception)
+            {
+                // Suggestions are a convenience, not core functionality - don't block
+                // startup over this failing.
+            }
+
             accounts.ListChanged += Accounts_ListChanged; // Persist the vault after every Add/Edit/Delete
 
             dgvAccounts.DataSource = accounts; // Set up DataGridView data binding
@@ -147,7 +163,7 @@ namespace PasswordManager
 
         private void AddEntry_Click(object sender, EventArgs e)
         {
-            using (var addEntryForm = new AddEntryForm(knownUsernames: accounts.Select(a => a.Username)))
+            using (var addEntryForm = new AddEntryForm())
             {
                 // Get the current cursor position
                 var mousePos = Control.MousePosition;
@@ -178,6 +194,7 @@ namespace PasswordManager
                 try
                 {
                     accounts.Add(account); // Add to BindingList
+                    CaptureUsernameSuggestion(account.Username);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -187,6 +204,19 @@ namespace PasswordManager
                 {
                     MessageBox.Show($"Error adding account: {ex.Message}");
                 }
+            }
+        }
+
+        private void CaptureUsernameSuggestion(string username)
+        {
+            try
+            {
+                UsernameSuggestionsStore.UpsertUsername(username);
+            }
+            catch (Exception)
+            {
+                // Suggestions are a convenience, not core functionality - the account is
+                // already saved regardless of whether this succeeds.
             }
         }
 
@@ -316,7 +346,7 @@ namespace PasswordManager
                 return;
             }
 
-            using (var editEntryForm = new AddEntryForm(selectedAccount, accounts.Select(a => a.Username)))
+            using (var editEntryForm = new AddEntryForm(selectedAccount))
             {
                 var mousePos = Control.MousePosition;
                 editEntryForm.StartPosition = FormStartPosition.Manual;
@@ -330,6 +360,7 @@ namespace PasswordManager
                     selectedAccount.Url = editEntryForm.Url;
                     selectedAccount.Notes = editEntryForm.Notes;
 
+                    CaptureUsernameSuggestion(selectedAccount.Username);
                     accounts.ResetItem(accounts.IndexOf(selectedAccount)); // Refresh the grid row to show the updated values
                 }
             }
