@@ -281,6 +281,7 @@ namespace PasswordManager
         {
             clipboardClearTimer.Stop();
             ClearClipboardIfStillCopied();
+            Application.Exit();
         }
 
         private void ClearClipboardIfStillCopied()
