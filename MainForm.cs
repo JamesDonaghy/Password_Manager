@@ -11,6 +11,7 @@ namespace PasswordManager
         private DataGridView dgvAccounts;
         private BindingList<Account> accounts; // Use BindingList for automatic updates
         private ContextMenuStrip contextMenu;
+        private MenuStrip menuStrip;
         private ToolStripMenuItem editEntryMenuItem;
         private ToolStripMenuItem deleteEntryMenuItem;
         private ToolStripMenuItem togglePasswordMenuItem;
@@ -53,10 +54,16 @@ namespace PasswordManager
             this.deleteEntryMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Delete Entry", null, DeleteEntry_Click);
             this.togglePasswordMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Show Password", null, TogglePasswordVisibility_Click);
             this.copyPasswordMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Copy Password", null, CopyPassword_Click);
-            this.contextMenu.Items.Add(new ToolStripSeparator()); // Visually separate row actions from app-level actions
-            this.contextMenu.Items.Add("Change Master Password", null, ChangeMasterPassword_Click); // Always available, doesn't depend on row selection
             this.contextMenu.Opening += ContextMenu_Opening; // Enable/disable menu items based on whether a row is selected
             this.dgvAccounts.ContextMenuStrip = this.contextMenu;
+
+            // App-level actions that don't depend on a selected row live in a proper menu
+            // bar, not the row context menu.
+            this.menuStrip = new MenuStrip { Dock = DockStyle.Top };
+            var settingsMenu = new ToolStripMenuItem("Settings");
+            settingsMenu.DropDownItems.Add("Change Master Password", null, ChangeMasterPassword_Click);
+            this.menuStrip.Items.Add(settingsMenu);
+            this.MainMenuStrip = this.menuStrip;
 
             // Right-clicking a row doesn't select it by default in a DataGridView, so without
             // this, Edit/Delete could act on whatever row was last left-clicked instead of the
@@ -70,6 +77,10 @@ namespace PasswordManager
             // the auto-clear timer never gets the chance to fire - clear it here instead.
             this.FormClosing += MainForm_FormClosing;
 
+            // menuStrip (Top-docked) must be added before dgvAccounts (Fill-docked) - a
+            // Fill-docked control added first claims all the space, leaving nothing for a
+            // Top-docked control added afterward.
+            this.Controls.Add(this.menuStrip);
             this.Controls.Add(this.dgvAccounts);
             this.Text = "Password Manager";
             this.Size = new System.Drawing.Size(800, 600);
