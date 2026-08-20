@@ -10,7 +10,7 @@ namespace PasswordManager
     public class AddEntryForm : Form
     {
         private TextBox txtService;
-        private TextBox txtUsername;
+        private ComboBox txtUsername;
         private TextBox txtPassword;
         private TextBox txtRepeatPassword; // New repeat password field
         private TextBox txtUrl; // New URL field
@@ -53,7 +53,7 @@ namespace PasswordManager
             var font = new System.Drawing.Font("Arial", 10);
 
             txtService = new TextBox { PlaceholderText = "Service Name", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font };
-            txtUsername = new TextBox { PlaceholderText = "Username", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font };
+            txtUsername = new ComboBox { Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font, DropDownStyle = ComboBoxStyle.DropDown };
             RefreshUsernameSuggestions(); // Builds suggestions from UsernameSuggestionsStore
 
             btnManageUsernames = new Button { Text = "👤", Width = buttonWidth, Height = buttonHeight, Font = font }; // Manage suggested usernames
@@ -365,10 +365,27 @@ namespace PasswordManager
                 suggestions = new List<string>();
             }
 
-            // AutoCompleteStringCollection needs distinct, non-empty entries - duplicates or
-            // blanks would just clutter the suggestion list without adding anything useful.
+            // Distinct, non-empty, alphabetical - duplicates or blanks would just clutter
+            // both the dropdown list and the type-ahead suggestions without adding anything
+            // useful, and an alphabetical dropdown is much easier to browse than insertion order.
+            string[] distinctSuggestions = suggestions
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Distinct()
+                .OrderBy(u => u, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            // Items drives what shows up when the dropdown arrow is clicked (browse without
+            // typing). Preserve whatever's currently typed/selected, since this also runs
+            // after editing the suggestion list mid-form via the manage button.
+            string currentText = txtUsername.Text;
+            txtUsername.Items.Clear();
+            txtUsername.Items.AddRange(distinctSuggestions);
+            txtUsername.Text = currentText;
+
+            // AutoCompleteCustomSource drives the separate live-filtering-while-typing
+            // behavior - Items alone doesn't affect this.
             var usernameSuggestions = new AutoCompleteStringCollection();
-            usernameSuggestions.AddRange(suggestions.Where(u => !string.IsNullOrWhiteSpace(u)).Distinct().ToArray());
+            usernameSuggestions.AddRange(distinctSuggestions);
 
             txtUsername.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
             txtUsername.AutoCompleteSource = AutoCompleteSource.CustomSource;
