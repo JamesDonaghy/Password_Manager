@@ -9,6 +9,7 @@ namespace PasswordManager
     public class MainForm : Form
     {
         private DataGridView dgvAccounts;
+        private TextBox txtSearch;
         private BindingList<Account> accounts; // Use BindingList for automatic updates
         private ContextMenuStrip contextMenu;
         private MenuStrip menuStrip;
@@ -41,8 +42,13 @@ namespace PasswordManager
             clipboardClearTimer = new System.Windows.Forms.Timer { Interval = 25000 }; // 25 seconds
             clipboardClearTimer.Tick += ClipboardClearTimer_Tick;
 
+            this.SuspendLayout();
+            
             InitializeComponent();
             InitializeDataGridView();
+
+            this.ResumeLayout(false);
+            this.PerformLayout();
         }
 
         private void InitializeComponent()
@@ -65,6 +71,9 @@ namespace PasswordManager
             this.menuStrip.Items.Add(settingsMenu);
             this.MainMenuStrip = this.menuStrip;
 
+            this.txtSearch = new TextBox { PlaceholderText = "Search by service, username, URL, or notes...", Dock = DockStyle.Top };
+            this.txtSearch.TextChanged += TxtSearch_TextChanged;
+
             // Right-clicking a row doesn't select it by default in a DataGridView, so without
             // this, Edit/Delete could act on whatever row was last left-clicked instead of the
             // one the user just right-clicked.
@@ -77,11 +86,14 @@ namespace PasswordManager
             // the auto-clear timer never gets the chance to fire - clear it here instead.
             this.FormClosing += MainForm_FormClosing;
 
-            // menuStrip (Top-docked) must be added before dgvAccounts (Fill-docked) - a
-            // Fill-docked control added first claims all the space, leaving nothing for a
-            // Top-docked control added afterward.
-            this.Controls.Add(this.menuStrip);
+            // Top-docked controls must be added before the Fill-docked grid - a Fill-docked
+            // control added first claims all the space, leaving nothing for a Top-docked
+            // control added afterward. Multiple Top-docked controls stack in the order
+            // added, so menuStrip ends up above txtSearch.
             this.Controls.Add(this.dgvAccounts);
+            this.Controls.Add(this.txtSearch);
+            this.Controls.Add(this.menuStrip);
+
             this.Text = "Password Manager";
             this.Size = new System.Drawing.Size(800, 600);
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -142,9 +154,9 @@ namespace PasswordManager
 
             accounts.ListChanged += Accounts_ListChanged; // Persist the vault after every Add/Edit/Delete
 
-            dgvAccounts.DataSource = accounts; // Set up DataGridView data binding
             dgvAccounts.Dock = DockStyle.Fill;
             dgvAccounts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            ApplyFilter(); // Sets DataSource - starts unfiltered since txtSearch is empty
 
             // Entries are only ever added/edited through AddEntryForm (via the right-click
             // menu), never by typing directly into the grid. Leaving AllowUserToAddRows on
@@ -170,6 +182,37 @@ namespace PasswordManager
             {
                 MessageBox.Show($"Could not save your vault: {ex.Message}", "Vault Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+
+            // The grid is bound to a filtered copy, not accounts directly (see ApplyFilter),
+            // so it needs an explicit refresh to pick up the change that just happened.
+            ApplyFilter();
+        }
+
+        private void TxtSearch_TextChanged(object sender, EventArgs e)
+        {
+            ApplyFilter();
+        }
+
+        private void ApplyFilter()
+        {
+            string filterText = txtSearch.Text.Trim();
+
+            // Deliberately not searching Password - matching against plaintext passwords in
+            // a search box isn't something a password manager should be doing, even locally.
+            IEnumerable<Account> filtered = string.IsNullOrEmpty(filterText)
+                ? accounts
+                : accounts.Where(a =>
+                    Contains(a.Service, filterText) ||
+                    Contains(a.Username, filterText) ||
+                    Contains(a.Url, filterText) ||
+                    Contains(a.Notes, filterText));
+
+            dgvAccounts.DataSource = new BindingList<Account>(filtered.ToList());
+        }
+
+        private static bool Contains(string value, string searchText)
+        {
+            return value != null && value.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void AddEntry_Click(object sender, EventArgs e)
