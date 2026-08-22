@@ -7,6 +7,7 @@ using System.Text.Json;
 
 namespace PasswordManager
 {
+    /// <summary>
     /// Encrypts and persists the account vault to a file in the user's AppData folder,
     /// using a key derived from the master password. Uses AES-GCM (authenticated
     /// encryption), so a corrupted or tampered file fails decryption loudly instead of
@@ -16,6 +17,7 @@ namespace PasswordManager
     /// every save. This is deliberately simple: because the key itself changes every time,
     /// there is no risk of ever reusing the same (key, nonce) pair, which is the one hard
     /// requirement AES-GCM depends on for its security guarantees.
+    /// </summary>
     public static class VaultStorage
     {
         private const int SaltSizeBytes = 16;   // 128-bit salt for key derivation
@@ -37,6 +39,29 @@ namespace PasswordManager
             return File.Exists(VaultFilePath);
         }
 
+        /// <summary>
+        /// Copies the current encrypted vault file to the given destination folder, as a
+        /// backup. This is a raw byte-for-byte copy of the already-encrypted file - no
+        /// decryption or re-encryption happens, so it adds no new security exposure beyond
+        /// the vault file already existing. Returns the full path the backup was saved to.
+        /// </summary>
+        public static string BackupVaultTo(string destinationFolderPath)
+        {
+            if (!VaultExists())
+            {
+                throw new InvalidOperationException("There is no vault file to back up yet.");
+            }
+
+            // Timestamped so repeated backups don't silently overwrite each other.
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string destinationFilePath = Path.Combine(destinationFolderPath, $"vault_backup_{timestamp}.dat");
+
+            File.Copy(VaultFilePath, destinationFilePath);
+
+            return destinationFilePath;
+        }
+
+        /// <summary>
         /// Loads and decrypts the vault. Returns an empty list if no vault file exists yet
         /// (e.g. right after first setting up a master password).
         ///
@@ -46,6 +71,7 @@ namespace PasswordManager
         /// and returning an empty vault straight away. loadedFromBackup tells the caller
         /// this happened, so the user can be told their data may be one save behind rather
         /// than silently trusting it's current.
+        /// </summary>
         public static List<Account> LoadVault(string masterPassword, out bool loadedFromBackup)
         {
             loadedFromBackup = false;
@@ -111,7 +137,9 @@ namespace PasswordManager
             return JsonSerializer.Deserialize<List<Account>>(json) ?? new List<Account>();
         }
 
+        /// <summary>
         /// Encrypts and saves the given account list, overwriting any previous vault file.
+        /// </summary>
         public static void SaveVault(List<Account> accounts, string masterPassword)
         {
             string directory = Path.GetDirectoryName(VaultFilePath);

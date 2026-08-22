@@ -73,6 +73,7 @@ namespace PasswordManager
             this.menuStrip = new MenuStrip { Dock = DockStyle.Top };
             var settingsMenu = new ToolStripMenuItem("Settings");
             settingsMenu.DropDownItems.Add("Change Master Password", null, ChangeMasterPassword_Click);
+            settingsMenu.DropDownItems.Add("Backup Vault...", null, BackupVault_Click);
             this.menuStrip.Items.Add(settingsMenu);
             this.MainMenuStrip = this.menuStrip;
 
@@ -536,6 +537,33 @@ namespace PasswordManager
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Could not change your master password: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void BackupVault_Click(object sender, EventArgs e)
+        {
+            using (var folderDialog = new FolderBrowserDialog { Description = "Choose a folder to save the vault backup to" })
+            {
+                if (folderDialog.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
+
+                try
+                {
+                    string savedPath = VaultStorage.BackupVaultTo(folderDialog.SelectedPath);
+                    MessageBox.Show(
+                        $"Vault backed up to:\n{savedPath}\n\n" +
+                        "This file is still encrypted with your master password - it can only be " +
+                        "restored back into this app, not opened directly elsewhere.",
+                        "Backup Complete",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not back up the vault: {ex.Message}", "Backup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
