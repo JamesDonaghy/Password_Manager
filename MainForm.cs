@@ -18,6 +18,11 @@ namespace PasswordManager
         private ToolStripMenuItem togglePasswordMenuItem;
         private ToolStripMenuItem copyPasswordMenuItem;
 
+        // Which column the grid is currently sorted by (an Account property name, e.g.
+        // "Service"), and in which direction. Null means unsorted (insertion order).
+        private string currentSortColumn;
+        private bool currentSortAscending = true;
+
         // Clears the clipboard a short time after Copy Password, so a copied password
         // doesn't sit there indefinitely for other apps/clipboard history tools to read.
         private readonly System.Windows.Forms.Timer clipboardClearTimer;
@@ -81,6 +86,10 @@ namespace PasswordManager
 
             // Masks the Password column's displayed text unless the row has been revealed.
             this.dgvAccounts.CellFormatting += DgvAccounts_CellFormatting;
+
+            // Click a column header to sort by it (see ApplyFilter/ApplySort - BindingList<T>
+            // doesn't support sorting on its own, so this is handled manually).
+            this.dgvAccounts.ColumnHeaderMouseClick += DgvAccounts_ColumnHeaderMouseClick;
 
             // If a copied password is still sitting on the clipboard when the app closes,
             // the auto-clear timer never gets the chance to fire - clear it here instead.
@@ -208,7 +217,65 @@ namespace PasswordManager
                     Contains(a.Url, filterText) ||
                     Contains(a.Notes, filterText));
 
+            filtered = ApplySort(filtered);
+
             dgvAccounts.DataSource = new BindingList<Account>(filtered.ToList());
+
+            // Columns are regenerated whenever DataSource is reassigned (AutoGenerateColumns
+            // is on), so both of these need reapplying every time, not just once at startup.
+            foreach (DataGridViewColumn column in dgvAccounts.Columns)
+            {
+                // Programmatic means DataGridView won't attempt its own automatic sorting -
+                // which BindingList<T> doesn't support anyway - and instead leaves header
+                // clicks entirely to DgvAccounts_ColumnHeaderMouseClick.
+                column.SortMode = DataGridViewColumnSortMode.Programmatic;
+                column.HeaderCell.SortGlyphDirection = column.Name == currentSortColumn
+                    ? (currentSortAscending ? SortOrder.Ascending : SortOrder.Descending)
+                    : SortOrder.None;
+            }
+        }
+
+        private IEnumerable<Account> ApplySort(IEnumerable<Account> source)
+        {
+            Func<Account, string> keySelector = currentSortColumn switch
+            {
+                nameof(Account.Service) => a => a.Service,
+                nameof(Account.Username) => a => a.Username,
+                nameof(Account.Url) => a => a.Url,
+                nameof(Account.Notes) => a => a.Notes,
+                _ => null
+            };
+
+            if (keySelector == null)
+            {
+                return source;
+            }
+
+            return currentSortAscending
+                ? source.OrderBy(keySelector, StringComparer.OrdinalIgnoreCase)
+                : source.OrderByDescending(keySelector, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void DgvAccounts_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            string columnName = dgvAccounts.Columns[e.ColumnIndex].Name;
+
+            if (columnName == nameof(Account.Password))
+            {
+                return; // Deliberately not sortable, same reasoning as excluding it from search
+            }
+
+            if (currentSortColumn == columnName)
+            {
+                currentSortAscending = !currentSortAscending; // Clicking the same column again reverses direction
+            }
+            else
+            {
+                currentSortColumn = columnName;
+                currentSortAscending = true;
+            }
+
+            ApplyFilter(); // Rebuilds the grid with the current filter and sort applied together
         }
 
         private static bool Contains(string value, string searchText)
