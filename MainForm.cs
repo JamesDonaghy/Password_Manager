@@ -43,7 +43,7 @@ namespace PasswordManager
             clipboardClearTimer.Tick += ClipboardClearTimer_Tick;
 
             this.SuspendLayout();
-            
+
             InitializeComponent();
             InitializeDataGridView();
 
@@ -96,9 +96,10 @@ namespace PasswordManager
 
             this.Text = "Password Manager";
             this.Size = new System.Drawing.Size(800, 600);
+            this.MinimumSize = new System.Drawing.Size(600, 400); // Keep the grid/search/menu bar usable at small sizes
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
+            this.FormBorderStyle = FormBorderStyle.Sizable;
+            this.MaximizeBox = true;
         }
 
         private void InitializeDataGridView()
