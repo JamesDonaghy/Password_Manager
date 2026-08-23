@@ -74,6 +74,7 @@ namespace PasswordManager
             var settingsMenu = new ToolStripMenuItem("Settings");
             settingsMenu.DropDownItems.Add("Change Master Password", null, ChangeMasterPassword_Click);
             settingsMenu.DropDownItems.Add("Backup Vault...", null, BackupVault_Click);
+            settingsMenu.DropDownItems.Add("Restore Vault...", null, RestoreVault_Click);
             this.menuStrip.Items.Add(settingsMenu);
             this.MainMenuStrip = this.menuStrip;
 
@@ -564,6 +565,53 @@ namespace PasswordManager
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Could not back up the vault: {ex.Message}", "Backup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void RestoreVault_Click(object sender, EventArgs e)
+        {
+            using (var openFileDialog = new OpenFileDialog
+            {
+                Title = "Choose a vault backup file to restore",
+                Filter = "Vault backup files (*.dat)|*.dat|All files (*.*)|*.*"
+            })
+            {
+                if (openFileDialog.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
+
+                var confirmResult = MessageBox.Show(
+                    "This will replace your current vault with the selected backup. Your " +
+                    "current vault will be kept as a .bak file, but the app needs to restart " +
+                    "afterward to safely load the restored data. Continue?",
+                    "Confirm Restore",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (confirmResult != DialogResult.Yes)
+                {
+                    return;
+                }
+
+                try
+                {
+                    // Validates the file decrypts with the current master password before
+                    // touching anything - see VaultStorage.RestoreVaultFrom.
+                    VaultStorage.RestoreVaultFrom(openFileDialog.FileName, masterPassword);
+
+                    MessageBox.Show(
+                        "Vault restored successfully. The app will now close - please reopen it to continue.",
+                        "Restore Complete",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+
+                    Application.Exit();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not restore the vault: {ex.Message}", "Restore Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }

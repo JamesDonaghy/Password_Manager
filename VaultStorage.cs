@@ -142,12 +142,6 @@ namespace PasswordManager
         /// </summary>
         public static void SaveVault(List<Account> accounts, string masterPassword)
         {
-            string directory = Path.GetDirectoryName(VaultFilePath);
-            if (!Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
             byte[] salt = RandomNumberGenerator.GetBytes(SaltSizeBytes);
             byte[] key = DeriveKey(masterPassword, salt);
 
@@ -171,16 +165,48 @@ namespace PasswordManager
             Buffer.BlockCopy(tag, 0, output, SaltSizeBytes + NonceSizeBytes, TagSizeBytes);
             Buffer.BlockCopy(ciphertext, 0, output, SaltSizeBytes + NonceSizeBytes + TagSizeBytes, ciphertext.Length);
 
-            // Write to a temporary file first, then atomically swap it into place, rather
-            // than writing directly to VaultFilePath. Since the vault is authenticated
-            // encryption, a file left half-written by a crash or power loss mid-write would
-            // fail decryption entirely on next load - not just losing the change being
-            // saved, but making every previously saved entry unreadable too. Writing to a
-            // temp file first means an interruption can only ever leave incomplete *temp*
-            // data behind; the real vault file is never touched until the write has fully
-            // succeeded.
+            AtomicallyWriteVaultFile(output);
+        }
+
+        /// <summary>
+        /// Replaces the current vault with the given backup file, after first confirming it
+        /// can actually be decrypted with the current master password. That check catches
+        /// picking the wrong file, a backup made under a since-changed master password, or
+        /// a corrupted file - all without ever touching the working vault if it fails.
+        /// </summary>
+        public static void RestoreVaultFrom(string sourceFilePath, string masterPassword)
+        {
+            if (!File.Exists(sourceFilePath))
+            {
+                throw new FileNotFoundException("The selected backup file could not be found.", sourceFilePath);
+            }
+
+            DecryptVaultFile(sourceFilePath, masterPassword); // Throws if this isn't a valid, decryptable vault
+
+            byte[] backupBytes = File.ReadAllBytes(sourceFilePath);
+            AtomicallyWriteVaultFile(backupBytes);
+        }
+
+        /// <summary>
+        /// Writes to a temporary file first, then atomically swaps it into place, rather
+        /// than writing directly to VaultFilePath. Since the vault is authenticated
+        /// encryption, a file left half-written by a crash or power loss mid-write would
+        /// fail decryption entirely on next load - not just losing the change being saved,
+        /// but making every previously saved entry unreadable too. Writing to a temp file
+        /// first means an interruption can only ever leave incomplete *temp* data behind;
+        /// the real vault file is never touched until the write has fully succeeded. Shared
+        /// by SaveVault and RestoreVaultFrom, so both get this guarantee identically.
+        /// </summary>
+        private static void AtomicallyWriteVaultFile(byte[] fileBytes)
+        {
+            string directory = Path.GetDirectoryName(VaultFilePath);
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
             string tempFilePath = VaultFilePath + ".tmp";
-            File.WriteAllBytes(tempFilePath, output);
+            File.WriteAllBytes(tempFilePath, fileBytes);
 
             if (File.Exists(VaultFilePath))
             {
@@ -191,7 +217,7 @@ namespace PasswordManager
             }
             else
             {
-                // First save ever - nothing to atomically replace yet.
+                // First write ever - nothing to atomically replace yet.
                 File.Move(tempFilePath, VaultFilePath);
             }
         }
