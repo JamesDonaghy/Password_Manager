@@ -319,6 +319,7 @@ namespace PasswordManager
                 {
                     accounts.Add(account); // Add to BindingList
                     CaptureUsernameSuggestion(account.Username);
+                    WarnIfPasswordReused(account);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -342,6 +343,34 @@ namespace PasswordManager
                 // Suggestions are a convenience, not core functionality - the account is
                 // already saved regardless of whether this succeeds.
             }
+        }
+
+        private void WarnIfPasswordReused(Account savedAccount)
+        {
+            if (string.IsNullOrEmpty(savedAccount.Password))
+            {
+                return;
+            }
+
+            // Reference inequality (a != savedAccount) excludes the entry itself - for Add,
+            // savedAccount is a new object not yet duplicated anywhere; for Edit,
+            // savedAccount is the same object already in accounts, just mutated in place.
+            List<string> otherServices = accounts
+                .Where(a => a != savedAccount && a.Password == savedAccount.Password)
+                .Select(a => a.Service)
+                .ToList();
+
+            if (otherServices.Count == 0)
+            {
+                return; // Non-blocking nudge, not a validation rule - nothing to do if unique
+            }
+
+            MessageBox.Show(
+                $"This password is also used for: {string.Join(", ", otherServices)}.\n\n" +
+                "Consider using a unique password for each account.",
+                "Password Reused",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
         }
 
         private void DgvAccounts_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
@@ -485,6 +514,7 @@ namespace PasswordManager
                     selectedAccount.Notes = editEntryForm.Notes;
 
                     CaptureUsernameSuggestion(selectedAccount.Username);
+                    WarnIfPasswordReused(selectedAccount);
                     accounts.ResetItem(accounts.IndexOf(selectedAccount)); // Refresh the grid row to show the updated values
                 }
             }
