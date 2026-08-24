@@ -25,6 +25,9 @@ namespace PasswordManager
         private Button btnToggleLengthSlider; // Toggle button for the length slider
         private TrackBar sliderPasswordLength; // Slider for password length
         private Label lblCurrentLength; // Label to show current length
+        private Panel pnlStrengthBarContainer;
+        private Panel pnlStrengthBarFill;
+        private Label lblStrengthText;
 
         public string Service { get; private set; }
         public string Username { get; private set; }
@@ -108,6 +111,19 @@ namespace PasswordManager
             btnToggleSymbols = new Button { Text = "⚙️", Width = buttonWidth, Height = buttonHeight, BackColor = System.Drawing.Color.LightGreen, Font = font }; // Gear icon for symbols
             btnToggleNumbers = new Button { Text = "🔢", Width = buttonWidth, Height = buttonHeight, BackColor = System.Drawing.Color.LightGreen, Font = font }; // Numbers icon
 
+            // Password strength meter: a bordered bar that fills proportionally and changes
+            // color, paired with a text label since color alone isn't accessible to everyone.
+            pnlStrengthBarContainer = new Panel { Width = 200, Height = 14, BorderStyle = BorderStyle.FixedSingle };
+            pnlStrengthBarFill = new Panel
+            {
+                Location = new System.Drawing.Point(0, 0),
+                Height = pnlStrengthBarContainer.ClientSize.Height,
+                Width = 0,
+                BackColor = System.Drawing.Color.Gray
+            };
+            pnlStrengthBarContainer.Controls.Add(pnlStrengthBarFill);
+            lblStrengthText = new Label { AutoSize = true, Font = font, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(8, 6, 0, 0) };
+
             // Add event handlers
             btnGeneratePassword.Click += BtnGeneratePassword_Click;
             btnTogglePasswordVisibility.Click += BtnTogglePasswordVisibility_Click; // Do not clear repeat password
@@ -140,6 +156,11 @@ namespace PasswordManager
             repeatUrlPanel.Controls.Add(txtRepeatPassword);
             repeatUrlPanel.Controls.Add(txtUrl);
 
+            // Create a panel for the password strength meter, shown directly below the password row
+            var strengthPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
+            strengthPanel.Controls.Add(pnlStrengthBarContainer);
+            strengthPanel.Controls.Add(lblStrengthText);
+
             // Create a panel for password length
             var lengthPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
             lengthPanel.Controls.Add(sliderPasswordLength); // Add slider for password length
@@ -150,11 +171,15 @@ namespace PasswordManager
             actionPanel.Controls.Add(btnCancel);
             actionPanel.Controls.Add(btnSave);
 
-            // Add controls to form in the correct order
+            // Add controls to form in the correct order. Same-Dock-style controls stack in
+            // the REVERSE of the order added here (last added ends up closest to the top
+            // edge) - confirmed the hard way in MainForm a few sessions back, so strengthPanel
+            // is added after lengthPanel but before passwordPanel to land visually between them.
             Controls.Add(txtNotes); // Add notes field at the bottom
             Controls.Add(actionPanel); // Add action panel for buttons
             Controls.Add(repeatUrlPanel); // Add repeat password and URL panel
             Controls.Add(lengthPanel); // Add the password length panel
+            Controls.Add(strengthPanel); // Add the password strength meter
             Controls.Add(passwordPanel); // Add the password panel
             Controls.Add(textBoxPanel); // Add the text box panel
 
@@ -232,6 +257,54 @@ namespace PasswordManager
             {
                 txtRepeatPassword.Enabled = false; // Disable if password is empty
             }
+
+            UpdatePasswordStrengthMeter();
+        }
+
+        private void UpdatePasswordStrengthMeter()
+        {
+            var (score, label, color) = EvaluatePasswordStrength(txtPassword.Text);
+
+            pnlStrengthBarFill.Width = (int)(pnlStrengthBarContainer.ClientSize.Width * (score / 100.0));
+            pnlStrengthBarFill.BackColor = color;
+            lblStrengthText.Text = label;
+            lblStrengthText.ForeColor = color;
+        }
+
+        /// <summary>
+        /// Simple, transparent heuristic - not a full entropy-based analysis, just length
+        /// plus character variety. Six criteria total, mapped to a 0-100 score and a tier.
+        /// </summary>
+        private static (int score, string label, System.Drawing.Color color) EvaluatePasswordStrength(string password)
+        {
+            if (string.IsNullOrEmpty(password))
+            {
+                return (0, "", System.Drawing.Color.Gray);
+            }
+
+            int criteriaMet = 0;
+            if (password.Length >= 8) criteriaMet++;
+            if (password.Length >= 12) criteriaMet++;
+            if (password.Any(char.IsLower)) criteriaMet++;
+            if (password.Any(char.IsUpper)) criteriaMet++;
+            if (password.Any(char.IsDigit)) criteriaMet++;
+            if (password.Any(c => !char.IsLetterOrDigit(c))) criteriaMet++;
+
+            int score = (int)(criteriaMet / 6.0 * 100);
+
+            if (criteriaMet <= 2)
+            {
+                return (score, "Weak", System.Drawing.Color.IndianRed);
+            }
+            if (criteriaMet <= 4)
+            {
+                return (score, "Fair", System.Drawing.Color.Orange);
+            }
+            if (criteriaMet == 5)
+            {
+                return (score, "Good", System.Drawing.Color.Goldenrod);
+            }
+            return (score, "Strong", System.Drawing.Color.SeaGreen);
         }
 
         private void TxtRepeatPassword_TextChanged(object sender, EventArgs e)
