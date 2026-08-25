@@ -7,5 +7,10 @@ namespace PasswordManager
         public string Password { get; set; }
         public string Url { get; set; }
         public string Notes { get; set; }
+
+        // Nullable because entries saved before these fields existed have no value here -
+        // that's shown as "-" in the grid rather than a misleading default date.
+        public System.DateTime? CreatedAt { get; set; }
+        public System.DateTime? ModifiedAt { get; set; }
     }
 }

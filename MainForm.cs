@@ -48,7 +48,7 @@ namespace PasswordManager
             clipboardClearTimer.Tick += ClipboardClearTimer_Tick;
 
             this.SuspendLayout();
-
+            
             InitializeComponent();
             InitializeDataGridView();
 
@@ -239,23 +239,32 @@ namespace PasswordManager
 
         private IEnumerable<Account> ApplySort(IEnumerable<Account> source)
         {
-            Func<Account, string> keySelector = currentSortColumn switch
+            switch (currentSortColumn)
             {
-                nameof(Account.Service) => a => a.Service,
-                nameof(Account.Username) => a => a.Username,
-                nameof(Account.Url) => a => a.Url,
-                nameof(Account.Notes) => a => a.Notes,
-                _ => null
-            };
-
-            if (keySelector == null)
-            {
-                return source;
+                case nameof(Account.Service):
+                    return Sort(source, a => a.Service, StringComparer.OrdinalIgnoreCase);
+                case nameof(Account.Username):
+                    return Sort(source, a => a.Username, StringComparer.OrdinalIgnoreCase);
+                case nameof(Account.Url):
+                    return Sort(source, a => a.Url, StringComparer.OrdinalIgnoreCase);
+                case nameof(Account.Notes):
+                    return Sort(source, a => a.Notes, StringComparer.OrdinalIgnoreCase);
+                // Nulls (entries with no timestamp) sort first in ascending order via the
+                // default DateTime? comparer - reasonable as "unknown/oldest" by default.
+                case nameof(Account.CreatedAt):
+                    return Sort(source, a => a.CreatedAt, Comparer<DateTime?>.Default);
+                case nameof(Account.ModifiedAt):
+                    return Sort(source, a => a.ModifiedAt, Comparer<DateTime?>.Default);
+                default:
+                    return source;
             }
+        }
 
+        private IEnumerable<Account> Sort<TKey>(IEnumerable<Account> source, Func<Account, TKey> keySelector, IComparer<TKey> comparer)
+        {
             return currentSortAscending
-                ? source.OrderBy(keySelector, StringComparer.OrdinalIgnoreCase)
-                : source.OrderByDescending(keySelector, StringComparer.OrdinalIgnoreCase);
+                ? source.OrderBy(keySelector, comparer)
+                : source.OrderByDescending(keySelector, comparer);
         }
 
         private void DgvAccounts_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
@@ -303,7 +312,9 @@ namespace PasswordManager
                         Username = addEntryForm.Username,
                         Password = addEntryForm.Password,
                         Url = addEntryForm.Url,
-                        Notes = addEntryForm.Notes
+                        Notes = addEntryForm.Notes,
+                        CreatedAt = DateTime.Now,
+                        ModifiedAt = DateTime.Now
                     };
 
                     AddAccount(account); // Attempt to add account
@@ -399,20 +410,29 @@ namespace PasswordManager
 
         private void DgvAccounts_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
-            if (dgvAccounts.Columns[e.ColumnIndex].Name != nameof(Account.Password))
+            string columnName = dgvAccounts.Columns[e.ColumnIndex].Name;
+
+            if (columnName == nameof(Account.Password))
             {
+                if (!(dgvAccounts.Rows[e.RowIndex].DataBoundItem is Account account) || revealedPasswords.Contains(account))
+                {
+                    return; // Either not a real data row, or this row has been revealed - show the real value
+                }
+
+                // Fixed-length mask regardless of the actual password's length, so the mask
+                // itself doesn't leak how long the real password is.
+                e.Value = "••••••••";
+                e.FormattingApplied = true;
                 return;
             }
 
-            if (!(dgvAccounts.Rows[e.RowIndex].DataBoundItem is Account account) || revealedPasswords.Contains(account))
+            if (columnName == nameof(Account.CreatedAt) || columnName == nameof(Account.ModifiedAt))
             {
-                return; // Either not a real data row, or this row has been revealed - show the real value
+                // Null means this entry was saved before these fields existed - show a
+                // placeholder rather than a misleading default date.
+                e.Value = e.Value is DateTime dateValue ? dateValue.ToString("g") : "-";
+                e.FormattingApplied = true;
             }
-
-            // Fixed-length mask regardless of the actual password's length, so the mask
-            // itself doesn't leak how long the real password is.
-            e.Value = "••••••••";
-            e.FormattingApplied = true;
         }
 
         private void TogglePasswordVisibility_Click(object sender, EventArgs e)
@@ -512,6 +532,7 @@ namespace PasswordManager
                     selectedAccount.Password = editEntryForm.Password;
                     selectedAccount.Url = editEntryForm.Url;
                     selectedAccount.Notes = editEntryForm.Notes;
+                    selectedAccount.ModifiedAt = DateTime.Now;
 
                     CaptureUsernameSuggestion(selectedAccount.Username);
                     WarnIfPasswordReused(selectedAccount);
