@@ -358,10 +358,6 @@ namespace PasswordManager
                     CaptureUsernameSuggestion(account.Username);
                     WarnIfPasswordReused(account);
                 }
-                catch (InvalidOperationException ex)
-                {
-                    MessageBox.Show($"InvalidOperationException: {ex.Message}");
-                }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Error adding account: {ex.Message}");
