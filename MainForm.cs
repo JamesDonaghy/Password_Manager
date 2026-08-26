@@ -235,6 +235,32 @@ namespace PasswordManager
                     ? (currentSortAscending ? SortOrder.Ascending : SortOrder.Descending)
                     : SortOrder.None;
             }
+
+            // Rows also get rebuilt every time DataSource changes, so re-highlight stale
+            // entries here too. Selecting a row still shows the normal selection highlight
+            // on top of this - that takes precedence, no conflict.
+            foreach (DataGridViewRow row in dgvAccounts.Rows)
+            {
+                if (row.DataBoundItem is Account account && IsStale(account))
+                {
+                    row.DefaultCellStyle.BackColor = StaleRowColor;
+
+                    foreach (DataGridViewCell cell in row.Cells)
+                    {
+                        cell.ToolTipText = $"This entry has no recorded update, or hasn't been " +
+                            $"changed in over {StaleEntryThresholdDays} days - consider reviewing it.";
+                    }
+                }
+            }
+        }
+
+        // ~6 months - a sensible default, easy to tune if it doesn't feel right in practice.
+        private const int StaleEntryThresholdDays = 180;
+        private static readonly System.Drawing.Color StaleRowColor = System.Drawing.Color.LightYellow;
+
+        private static bool IsStale(Account account)
+        {
+            return account.ModifiedAt == null || (DateTime.Now - account.ModifiedAt.Value).TotalDays > StaleEntryThresholdDays;
         }
 
         private IEnumerable<Account> ApplySort(IEnumerable<Account> source)
