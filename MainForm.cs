@@ -25,8 +25,7 @@ namespace PasswordManager
 
         // Clears the clipboard a short time after Copy Password, so a copied password
         // doesn't sit there indefinitely for other apps/clipboard history tools to read.
-        private readonly System.Windows.Forms.Timer clipboardClearTimer;
-        private string lastCopiedPassword;
+        private readonly ClipboardGuard clipboardGuard = new ClipboardGuard();
 
         // Tracks which accounts currently have their password shown in the grid.
         // Reference equality (the default for a class with no overridden Equals) is exactly
@@ -43,9 +42,6 @@ namespace PasswordManager
         public MainForm(string masterPassword)
         {
             this.masterPassword = masterPassword;
-
-            clipboardClearTimer = new System.Windows.Forms.Timer { Interval = 25000 }; // 25 seconds
-            clipboardClearTimer.Tick += ClipboardClearTimer_Tick;
 
             this.SuspendLayout();
             
@@ -479,59 +475,21 @@ namespace PasswordManager
                 return;
             }
 
-            try
-            {
-                Clipboard.SetText(selectedAccount.Password);
-                lastCopiedPassword = selectedAccount.Password;
-
-                clipboardClearTimer.Stop(); // Restart the countdown rather than stacking timers if copied again
-                clipboardClearTimer.Start();
-            }
-            catch (Exception ex)
-            {
-                // The clipboard can occasionally be locked by another app - worth telling
-                // the user directly here, since a silent failure would look like copying
-                // just didn't do anything.
-                MessageBox.Show($"Could not copy password to clipboard: {ex.Message}", "Copy Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void ClipboardClearTimer_Tick(object sender, EventArgs e)
-        {
-            clipboardClearTimer.Stop(); // Only clear once per copy, not repeatedly
-            ClearClipboardIfStillCopied();
+            clipboardGuard.CopyAndAutoClear(selectedAccount.Password);
         }
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            clipboardClearTimer.Stop();
-            ClearClipboardIfStillCopied();
+            // If a copied password is still sitting on the clipboard, the auto-clear timer
+            // never gets the chance to fire on its own - clear it here instead.
+            clipboardGuard.ClearIfStillCopied();
+
+            // LoginForm called Hide() rather than Close() when login succeeded, so it's
+            // still technically open - and Application.Run (in Program.cs) is watching
+            // LoginForm's lifetime, since that's the form the app started with. Without
+            // this, closing MainForm alone doesn't end the application; the process keeps
+            // running invisibly even though no window is left open.
             Application.Exit();
-        }
-
-        private void ClearClipboardIfStillCopied()
-        {
-            if (lastCopiedPassword == null)
-            {
-                return;
-            }
-
-            try
-            {
-                // Only clear if the clipboard still holds what we copied - if the user has
-                // since copied something else, wiping it out would be surprising and unwelcome.
-                if (Clipboard.ContainsText() && Clipboard.GetText() == lastCopiedPassword)
-                {
-                    Clipboard.Clear();
-                }
-            }
-            catch (Exception)
-            {
-                // Best-effort cleanup, whether from the timer or on the way out - not worth
-                // interrupting the user (or blocking shutdown) over this failing.
-            }
-
-            lastCopiedPassword = null;
         }
 
         private void EditEntry_Click(object sender, EventArgs e)
