@@ -18,10 +18,7 @@ namespace PasswordManager
         private ToolStripMenuItem togglePasswordMenuItem;
         private ToolStripMenuItem copyPasswordMenuItem;
 
-        // Which column the grid is currently sorted by (an Account property name, e.g.
-        // "Service"), and in which direction. Null means unsorted (insertion order).
-        private string currentSortColumn;
-        private bool currentSortAscending = true;
+        private AccountGridPresenter gridPresenter;
 
         // Clears the clipboard a short time after Copy Password, so a copied password
         // doesn't sit there indefinitely for other apps/clipboard history tools to read.
@@ -82,12 +79,10 @@ namespace PasswordManager
             // one the user just right-clicked.
             this.dgvAccounts.CellMouseDown += DgvAccounts_CellMouseDown;
 
-            // Masks the Password column's displayed text unless the row has been revealed.
-            this.dgvAccounts.CellFormatting += DgvAccounts_CellFormatting;
-
-            // Click a column header to sort by it (see ApplyFilter/ApplySort - BindingList<T>
-            // doesn't support sorting on its own, so this is handled manually).
-            this.dgvAccounts.ColumnHeaderMouseClick += DgvAccounts_ColumnHeaderMouseClick;
+            // Owns filtering, sorting, column setup, password masking, date formatting,
+            // and stale-entry highlighting - see AccountGridPresenter for why reveal-state
+            // is passed in as a predicate rather than owned by it.
+            this.gridPresenter = new AccountGridPresenter(this.dgvAccounts, account => revealedPasswords.Contains(account));
 
             // If a copied password is still sitting on the clipboard when the app closes,
             // the auto-clear timer never gets the chance to fire - clear it here instead.
@@ -164,7 +159,7 @@ namespace PasswordManager
 
             dgvAccounts.Dock = DockStyle.Fill;
             dgvAccounts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            ApplyFilter(); // Sets DataSource - starts unfiltered since txtSearch is empty
+            gridPresenter.Refresh(accounts, txtSearch.Text); // Starts unfiltered since txtSearch is empty
 
             // Entries are only ever added/edited through AddEntryForm (via the right-click
             // menu), never by typing directly into the grid. Leaving AllowUserToAddRows on
@@ -191,119 +186,15 @@ namespace PasswordManager
                 MessageBox.Show($"Could not save your vault: {ex.Message}", "Vault Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
-            // The grid is bound to a filtered copy, not accounts directly (see ApplyFilter),
-            // so it needs an explicit refresh to pick up the change that just happened.
-            ApplyFilter();
+            // The grid is bound to a filtered copy, not accounts directly (see
+            // AccountGridPresenter), so it needs an explicit refresh to pick up the change
+            // that just happened.
+            gridPresenter.Refresh(accounts, txtSearch.Text);
         }
 
         private void TxtSearch_TextChanged(object sender, EventArgs e)
         {
-            ApplyFilter();
-        }
-
-        private void ApplyFilter()
-        {
-            string filterText = txtSearch.Text.Trim();
-
-            // Deliberately not searching Password - matching against plaintext passwords in
-            // a search box isn't something a password manager should be doing, even locally.
-            IEnumerable<Account> filtered = string.IsNullOrEmpty(filterText)
-                ? accounts
-                : accounts.Where(a =>
-                    Contains(a.Service, filterText) ||
-                    Contains(a.Username, filterText) ||
-                    Contains(a.Url, filterText) ||
-                    Contains(a.Notes, filterText));
-
-            filtered = ApplySort(filtered);
-
-            dgvAccounts.DataSource = new BindingList<Account>(filtered.ToList());
-
-            // Columns are regenerated whenever DataSource is reassigned (AutoGenerateColumns
-            // is on), so both of these need reapplying every time, not just once at startup.
-            foreach (DataGridViewColumn column in dgvAccounts.Columns)
-            {
-                // Programmatic means DataGridView won't attempt its own automatic sorting -
-                // which BindingList<T> doesn't support anyway - and instead leaves header
-                // clicks entirely to DgvAccounts_ColumnHeaderMouseClick.
-                column.SortMode = DataGridViewColumnSortMode.Programmatic;
-                column.HeaderCell.SortGlyphDirection = column.Name == currentSortColumn
-                    ? (currentSortAscending ? SortOrder.Ascending : SortOrder.Descending)
-                    : SortOrder.None;
-            }
-
-            // Rows also get rebuilt every time DataSource changes, so re-highlight stale
-            // entries here too. Selecting a row still shows the normal selection highlight
-            // on top of this - that takes precedence, no conflict.
-            foreach (DataGridViewRow row in dgvAccounts.Rows)
-            {
-                if (row.DataBoundItem is Account account && StaleEntryPolicy.IsStale(account))
-                {
-                    row.DefaultCellStyle.BackColor = StaleEntryPolicy.HighlightColor;
-
-                    foreach (DataGridViewCell cell in row.Cells)
-                    {
-                        cell.ToolTipText = StaleEntryPolicy.ExplanationText;
-                    }
-                }
-            }
-        }
-
-        private IEnumerable<Account> ApplySort(IEnumerable<Account> source)
-        {
-            switch (currentSortColumn)
-            {
-                case nameof(Account.Service):
-                    return Sort(source, a => a.Service, StringComparer.OrdinalIgnoreCase);
-                case nameof(Account.Username):
-                    return Sort(source, a => a.Username, StringComparer.OrdinalIgnoreCase);
-                case nameof(Account.Url):
-                    return Sort(source, a => a.Url, StringComparer.OrdinalIgnoreCase);
-                case nameof(Account.Notes):
-                    return Sort(source, a => a.Notes, StringComparer.OrdinalIgnoreCase);
-                // Nulls (entries with no timestamp) sort first in ascending order via the
-                // default DateTime? comparer - reasonable as "unknown/oldest" by default.
-                case nameof(Account.CreatedAt):
-                    return Sort(source, a => a.CreatedAt, Comparer<DateTime?>.Default);
-                case nameof(Account.ModifiedAt):
-                    return Sort(source, a => a.ModifiedAt, Comparer<DateTime?>.Default);
-                default:
-                    return source;
-            }
-        }
-
-        private IEnumerable<Account> Sort<TKey>(IEnumerable<Account> source, Func<Account, TKey> keySelector, IComparer<TKey> comparer)
-        {
-            return currentSortAscending
-                ? source.OrderBy(keySelector, comparer)
-                : source.OrderByDescending(keySelector, comparer);
-        }
-
-        private void DgvAccounts_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
-        {
-            string columnName = dgvAccounts.Columns[e.ColumnIndex].Name;
-
-            if (columnName == nameof(Account.Password))
-            {
-                return; // Deliberately not sortable, same reasoning as excluding it from search
-            }
-
-            if (currentSortColumn == columnName)
-            {
-                currentSortAscending = !currentSortAscending; // Clicking the same column again reverses direction
-            }
-            else
-            {
-                currentSortColumn = columnName;
-                currentSortAscending = true;
-            }
-
-            ApplyFilter(); // Rebuilds the grid with the current filter and sort applied together
-        }
-
-        private static bool Contains(string value, string searchText)
-        {
-            return value != null && value.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+            gridPresenter.Refresh(accounts, txtSearch.Text);
         }
 
         private void AddEntry_Click(object sender, EventArgs e)
@@ -414,33 +305,6 @@ namespace PasswordManager
             togglePasswordMenuItem.Text = hasSelection && revealedPasswords.Contains(selectedAccount)
                 ? "Hide Password"
                 : "Show Password";
-        }
-
-        private void DgvAccounts_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            string columnName = dgvAccounts.Columns[e.ColumnIndex].Name;
-
-            if (columnName == nameof(Account.Password))
-            {
-                if (!(dgvAccounts.Rows[e.RowIndex].DataBoundItem is Account account) || revealedPasswords.Contains(account))
-                {
-                    return; // Either not a real data row, or this row has been revealed - show the real value
-                }
-
-                // Fixed-length mask regardless of the actual password's length, so the mask
-                // itself doesn't leak how long the real password is.
-                e.Value = "••••••••";
-                e.FormattingApplied = true;
-                return;
-            }
-
-            if (columnName == nameof(Account.CreatedAt) || columnName == nameof(Account.ModifiedAt))
-            {
-                // Null means this entry was saved before these fields existed - show a
-                // placeholder rather than a misleading default date.
-                e.Value = e.Value is DateTime dateValue ? dateValue.ToString("g") : "-";
-                e.FormattingApplied = true;
-            }
         }
 
         private void TogglePasswordVisibility_Click(object sender, EventArgs e)
