@@ -25,10 +25,7 @@ namespace PasswordManager
         private readonly ClipboardGuard clipboardGuard = new ClipboardGuard();
 
         // Tracks which accounts currently have their password shown in the grid.
-        // Reference equality (the default for a class with no overridden Equals) is exactly
-        // what we want here - each Account is a distinct object, so this only tracks the
-        // specific rows the user has chosen to reveal, not accounts with equal-looking data.
-        private readonly HashSet<Account> revealedPasswords = new HashSet<Account>();
+        private readonly RevealedPasswordTracker passwordRevealTracker = new RevealedPasswordTracker();
 
         // Needed to derive the vault's encryption key (see VaultStorage). Kept only in
         // memory for the lifetime of this form - never written to disk anywhere. Not
@@ -82,7 +79,7 @@ namespace PasswordManager
             // Owns filtering, sorting, column setup, password masking, date formatting,
             // and stale-entry highlighting - see AccountGridPresenter for why reveal-state
             // is passed in as a predicate rather than owned by it.
-            this.gridPresenter = new AccountGridPresenter(this.dgvAccounts, account => revealedPasswords.Contains(account));
+            this.gridPresenter = new AccountGridPresenter(this.dgvAccounts, passwordRevealTracker.IsRevealed);
 
             // If a copied password is still sitting on the clipboard when the app closes,
             // the auto-clear timer never gets the chance to fire - clear it here instead.
@@ -302,7 +299,7 @@ namespace PasswordManager
             deleteEntryMenuItem.Enabled = hasSelection;
             togglePasswordMenuItem.Enabled = hasSelection;
             copyPasswordMenuItem.Enabled = hasSelection;
-            togglePasswordMenuItem.Text = hasSelection && revealedPasswords.Contains(selectedAccount)
+            togglePasswordMenuItem.Text = hasSelection && passwordRevealTracker.IsRevealed(selectedAccount)
                 ? "Hide Password"
                 : "Show Password";
         }
@@ -314,11 +311,7 @@ namespace PasswordManager
                 return;
             }
 
-            if (!revealedPasswords.Remove(selectedAccount))
-            {
-                revealedPasswords.Add(selectedAccount);
-            }
-
+            passwordRevealTracker.Toggle(selectedAccount);
             dgvAccounts.InvalidateRow(dgvAccounts.CurrentRow.Index); // Force this row's cells to re-format
         }
 
@@ -391,7 +384,7 @@ namespace PasswordManager
             if (confirmResult == DialogResult.Yes)
             {
                 accounts.Remove(selectedAccount);
-                revealedPasswords.Remove(selectedAccount);
+                passwordRevealTracker.Forget(selectedAccount);
             }
         }
 
