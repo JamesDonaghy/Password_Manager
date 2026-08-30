@@ -10,6 +10,9 @@ namespace PasswordManager
     {
         private DataGridView dgvAccounts;
         private TextBox txtSearch;
+        private Panel leftNavPanel;
+        private Panel rightDetailsPanel;
+        private Label rightDetailsPlaceholder;
         private BindingList<Account> accounts; // Use BindingList for automatic updates
         private ContextMenuStrip contextMenu;
         private MenuStrip menuStrip;
@@ -85,17 +88,74 @@ namespace PasswordManager
             // the auto-clear timer never gets the chance to fire - clear it here instead.
             this.FormClosing += MainForm_FormClosing;
 
-            // Top-docked controls must be added before the Fill-docked grid - a Fill-docked
-            // control added first claims all the space, leaving nothing for a Top-docked
-            // control added afterward. Multiple Top-docked controls stack in the order
-            // added, so menuStrip ends up above txtSearch.
-            this.Controls.Add(this.dgvAccounts);
-            this.Controls.Add(this.txtSearch);
+            // --- Three-column layout ---
+            // Using a TableLayoutPanel with explicit column positions rather than more
+            // stacked Dock-style siblings, since we've already been burned once by
+            // same-Dock-style sibling ordering being non-obvious (the menu bar/search box
+            // overlap bug). Explicit cell positions avoid that ambiguity entirely.
+
+            // Left column: navigation - empty placeholder for now (Phase 2 adds real items,
+            // and only the ones actually wanted, per the incremental plan).
+            this.leftNavPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = System.Drawing.Color.WhiteSmoke,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            var leftNavHeader = new Label
+            {
+                Text = "Navigation",
+                Dock = DockStyle.Top,
+                Height = 32,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                ForeColor = System.Drawing.Color.Gray
+            };
+            this.leftNavPanel.Controls.Add(leftNavHeader);
+
+            // Middle column: today's search box + grid, unchanged - just moved into a
+            // narrower column instead of spanning the whole window. Same fill/search/sort/
+            // reveal/copy behavior as before.
+            var middlePanel = new Panel { Dock = DockStyle.Fill };
+            middlePanel.Controls.Add(this.dgvAccounts);
+            middlePanel.Controls.Add(this.txtSearch);
+
+            // Right column: entry details - empty placeholder for now (Phase 4 wires this
+            // up to the selected row).
+            this.rightDetailsPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = System.Drawing.Color.WhiteSmoke,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            this.rightDetailsPlaceholder = new Label
+            {
+                Text = "Select an entry to see details",
+                Dock = DockStyle.Fill,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                ForeColor = System.Drawing.Color.Gray
+            };
+            this.rightDetailsPanel.Controls.Add(this.rightDetailsPlaceholder);
+
+            var mainLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 1
+            };
+            mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180)); // Left nav
+            mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // Middle - takes remaining space
+            mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250)); // Right details
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            mainLayout.Controls.Add(this.leftNavPanel, 0, 0);
+            mainLayout.Controls.Add(middlePanel, 1, 0);
+            mainLayout.Controls.Add(this.rightDetailsPanel, 2, 0);
+
+            this.Controls.Add(mainLayout);
             this.Controls.Add(this.menuStrip);
 
             this.Text = "Password Manager";
-            this.Size = new System.Drawing.Size(800, 600);
-            this.MinimumSize = new System.Drawing.Size(600, 400); // Keep the grid/search/menu bar usable at small sizes
+            this.Size = new System.Drawing.Size(1100, 650); // Wider than before - three columns need more room
+            this.MinimumSize = new System.Drawing.Size(700, 450); // Keep all three columns usable at small sizes
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.Sizable;
             this.MaximizeBox = true;
