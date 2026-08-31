@@ -94,23 +94,57 @@ namespace PasswordManager
             // same-Dock-style sibling ordering being non-obvious (the menu bar/search box
             // overlap bug). Explicit cell positions avoid that ambiguity entirely.
 
-            // Left column: navigation - empty placeholder for now (Phase 2 adds real items,
-            // and only the ones actually wanted, per the incremental plan).
+            // Left column: navigation. Reuses the exact same handlers already wired to the
+            // top Settings menu (Backup Vault, Restore Vault, Change Master Password) -
+            // nothing new is being built here, just an additional way to reach it. The old
+            // menu stays as-is for now, per instruction, until it's decided the sidebar
+            // fully replaces it.
             this.leftNavPanel = new Panel
             {
                 Dock = DockStyle.Fill,
                 BackColor = System.Drawing.Color.WhiteSmoke,
                 BorderStyle = BorderStyle.FixedSingle
             };
-            var leftNavHeader = new Label
+
+            var btnSettings = new Button
             {
-                Text = "Navigation",
+                Text = "Change Master Password",
                 Dock = DockStyle.Top,
-                Height = 32,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                ForeColor = System.Drawing.Color.Gray
+                Height = 40,
+                FlatStyle = FlatStyle.Flat,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Padding = new Padding(10, 0, 0, 0)
             };
-            this.leftNavPanel.Controls.Add(leftNavHeader);
+            btnSettings.Click += ChangeMasterPassword_Click; // Same handler as the existing Settings menu item
+
+            var btnRestoreVault = new Button
+            {
+                Text = "Restore Vault",
+                Dock = DockStyle.Top,
+                Height = 40,
+                FlatStyle = FlatStyle.Flat,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Padding = new Padding(10, 0, 0, 0)
+            };
+            btnRestoreVault.Click += RestoreVault_Click; // Same handler as the existing menu item
+
+            var btnBackupVault = new Button
+            {
+                Text = "Backup Vault",
+                Dock = DockStyle.Top,
+                Height = 40,
+                FlatStyle = FlatStyle.Flat,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Padding = new Padding(10, 0, 0, 0)
+            };
+            btnBackupVault.Click += BackupVault_Click; // Same handler as the existing menu item
+
+            // Stacked Dock=Top siblings render in reverse of the order added (last added
+            // ends up closest to the top edge) - see the earlier menu bar/search box fix
+            // for why this is called out explicitly rather than assumed.
+            this.leftNavPanel.Controls.Add(btnSettings);
+            this.leftNavPanel.Controls.Add(btnRestoreVault);
+            this.leftNavPanel.Controls.Add(btnBackupVault);
 
             // Middle column: today's search box + grid, unchanged - just moved into a
             // narrower column instead of spanning the whole window. Same fill/search/sort/
