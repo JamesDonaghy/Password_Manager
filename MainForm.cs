@@ -13,6 +13,15 @@ namespace PasswordManager
         private Panel leftNavPanel;
         private Panel rightDetailsPanel;
         private Label rightDetailsPlaceholder;
+        private Panel detailsContentPanel;
+        private Label lblDetailsService;
+        private Label lblDetailsUsername;
+        private Label lblDetailsPassword;
+        private Button btnDetailsTogglePassword;
+        private Label lblDetailsUrl;
+        private TextBox txtDetailsNotes;
+        private Label lblDetailsCreated;
+        private Label lblDetailsModified;
         private BindingList<Account> accounts; // Use BindingList for automatic updates
         private ContextMenuStrip contextMenu;
         private MenuStrip menuStrip;
@@ -153,8 +162,8 @@ namespace PasswordManager
             middlePanel.Controls.Add(this.dgvAccounts);
             middlePanel.Controls.Add(this.txtSearch);
 
-            // Right column: entry details - empty placeholder for now (Phase 4 wires this
-            // up to the selected row).
+            // Right column: entry details. Content is built once here and just updated
+            // in-place on selection change, rather than rebuilt each time.
             this.rightDetailsPanel = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -168,7 +177,125 @@ namespace PasswordManager
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 ForeColor = System.Drawing.Color.Gray
             };
+
+            this.detailsContentPanel = new Panel { Dock = DockStyle.Fill, Visible = false };
+
+            lblDetailsService = new Label
+            {
+                // AutoSize (rather than Dock = Fill) so the TableLayoutPanel's AutoSize row
+                // can read this label's true preferred height for its 14pt bold font. With
+                // Dock = Fill and AutoSize off, the row had no reliable height to measure
+                // against and ended up too short, clipping the bottom of the text.
+                AutoSize = true,
+                Font = new System.Drawing.Font("Arial", 14, System.Drawing.FontStyle.Bold),
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Margin = new Padding(10, 10, 0, 4)
+            };
+
+            lblDetailsUsername = new Label
+            {
+                AutoSize = false,
+                AutoEllipsis = true, // Long values (e.g. full emails) get "..." instead of forcing the row to wrap
+                Width = 150,
+                Height = 20,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            var btnDetailsCopyUsername = new Button { Text = "Copy", Width = 60, Height = 24 };
+            btnDetailsCopyUsername.Click += (sender, e) =>
+            {
+                if (dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount)
+                {
+                    clipboardGuard.CopyAndAutoClear(selectedAccount.Username);
+                }
+            };
+
+            lblDetailsPassword = new Label
+            {
+                AutoSize = false,
+                AutoEllipsis = true,
+                Width = 100,
+                Height = 20,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            btnDetailsTogglePassword = new Button { Text = "Show", Width = 60, Height = 24 };
+            btnDetailsTogglePassword.Click += (sender, e) =>
+            {
+                if (!(dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount))
+                {
+                    return;
+                }
+
+                passwordRevealTracker.Toggle(selectedAccount);
+                dgvAccounts.InvalidateRow(dgvAccounts.CurrentRow.Index); // Keep the grid's own masking in sync too
+                RefreshDetailsPanel();
+            };
+            var btnDetailsCopyPassword = new Button { Text = "Copy", Width = 60, Height = 24 };
+            btnDetailsCopyPassword.Click += (sender, e) =>
+            {
+                if (dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount)
+                {
+                    clipboardGuard.CopyAndAutoClear(selectedAccount.Password);
+                }
+            };
+
+            lblDetailsUrl = new Label { AutoSize = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+
+            txtDetailsNotes = new TextBox
+            {
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Height = 60,
+                Width = 160,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            lblDetailsCreated = new Label { AutoSize = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            lblDetailsModified = new Label { AutoSize = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+
+            var detailsLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8 };
+            for (int i = 0; i < 7; i++)
+            {
+                detailsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            }
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Spacer - absorbs leftover space
+
+            detailsLayout.Controls.Add(lblDetailsService, 0, 0);
+            detailsLayout.Controls.Add(CreateDetailRow("Username:", lblDetailsUsername, btnDetailsCopyUsername), 0, 1);
+            detailsLayout.Controls.Add(CreateDetailRow("Password:", lblDetailsPassword, btnDetailsTogglePassword, btnDetailsCopyPassword), 0, 2);
+            detailsLayout.Controls.Add(CreateDetailRow("URL:", lblDetailsUrl), 0, 3);
+            detailsLayout.Controls.Add(CreateDetailRow("Notes:", txtDetailsNotes), 0, 4);
+            detailsLayout.Controls.Add(CreateDetailRow("Created:", lblDetailsCreated), 0, 5);
+            detailsLayout.Controls.Add(CreateDetailRow("Modified:", lblDetailsModified), 0, 6);
+
+            // Edit and Delete reuse the exact same handlers as the context menu's Edit
+            // Entry/Delete Entry items - both already operate on whatever's currently
+            // selected in the grid, which is exactly what this panel is showing.
+            var btnDetailsEdit = new Button { Text = "Edit", Width = 80, Height = 32 };
+            btnDetailsEdit.Click += EditEntry_Click;
+            var btnDetailsDelete = new Button { Text = "Delete", Width = 80, Height = 32 };
+            btnDetailsDelete.Click += DeleteEntry_Click;
+            var detailsActionsPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                FlowDirection = FlowDirection.RightToLeft,
+                AutoSize = true,
+                Padding = new Padding(10)
+            };
+            detailsActionsPanel.Controls.Add(btnDetailsDelete);
+            detailsActionsPanel.Controls.Add(btnDetailsEdit);
+
+            this.detailsContentPanel.Controls.Add(detailsLayout);
+            this.detailsContentPanel.Controls.Add(detailsActionsPanel);
+
+            this.rightDetailsPanel.Controls.Add(this.detailsContentPanel);
             this.rightDetailsPanel.Controls.Add(this.rightDetailsPlaceholder);
+
+            // Updates the details panel whenever the selected row changes - including
+            // clearing back to the placeholder when nothing is selected (e.g. right after
+            // the grid refreshes following an Add/Edit/Delete, which doesn't currently
+            // preserve selection - a known rough edge for a later pass).
+            this.dgvAccounts.SelectionChanged += (sender, e) => RefreshDetailsPanel();
 
             var mainLayout = new TableLayoutPanel
             {
@@ -178,7 +305,7 @@ namespace PasswordManager
             };
             mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180)); // Left nav
             mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // Middle - takes remaining space
-            mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250)); // Right details
+            mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 340)); // Right details - widened so the Copy/Show buttons fit next to the value on one line instead of wrapping below it
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             mainLayout.Controls.Add(this.leftNavPanel, 0, 0);
             mainLayout.Controls.Add(middlePanel, 1, 0);
@@ -188,8 +315,8 @@ namespace PasswordManager
             this.Controls.Add(this.menuStrip);
 
             this.Text = "Password Manager";
-            this.Size = new System.Drawing.Size(1100, 650); // Wider than before - three columns need more room
-            this.MinimumSize = new System.Drawing.Size(700, 450); // Keep all three columns usable at small sizes
+            this.Size = new System.Drawing.Size(1190, 650); // Wider than before - right column grew by 90px, so the window grows to match rather than squeezing the grid
+            this.MinimumSize = new System.Drawing.Size(790, 450); // Keep all three columns usable at small sizes
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.Sizable;
             this.MaximizeBox = true;
@@ -261,6 +388,95 @@ namespace PasswordManager
             dgvAccounts.AllowUserToAddRows = false;
             dgvAccounts.AllowUserToDeleteRows = false;
             dgvAccounts.ReadOnly = true;
+        }
+
+        /// Builds one "Caption: value [buttons]" row for the details panel, keeping every
+        /// row's layout consistent without repeating the same FlowLayoutPanel setup each time.
+        private static Control CreateDetailRow(string caption, Control valueControl, params Control[] extraControls)
+        {
+            // A FlowLayoutPanel was used here previously, but it wraps to a new line
+            // whenever caption + value + buttons don't all fit on one row - which is
+            // exactly what was happening to the Username/Password rows (buttons ended up
+            // stranded on their own line below). A TableLayoutPanel with a dedicated,
+            // never-shrinking column for the buttons keeps them pinned to the right of the
+            // row instead: the value column simply ellipsizes if it runs out of room.
+            var row = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 3,
+                RowCount = 1,
+                Padding = new Padding(10, 5, 10, 5)
+            };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));   // Caption
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // Value - takes whatever space is left
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));   // Buttons - always keeps its full width
+
+            var captionLabel = new Label
+            {
+                Text = caption,
+                AutoSize = true,
+                Font = new System.Drawing.Font("Arial", 9, System.Drawing.FontStyle.Bold),
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Margin = new Padding(0, 3, 8, 0)
+            };
+
+            valueControl.Margin = new Padding(0, 3, 8, 0);
+            if (valueControl is Label && !(valueControl is TextBox))
+            {
+                valueControl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            }
+
+            row.Controls.Add(captionLabel, 0, 0);
+            row.Controls.Add(valueControl, 1, 0);
+
+            if (extraControls.Length > 0)
+            {
+                var buttonsPanel = new FlowLayoutPanel
+                {
+                    FlowDirection = FlowDirection.LeftToRight,
+                    AutoSize = true,
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                    WrapContents = false,
+                    Margin = new Padding(0)
+                };
+                foreach (Control extra in extraControls)
+                {
+                    buttonsPanel.Controls.Add(extra);
+                }
+                row.Controls.Add(buttonsPanel, 2, 0);
+            }
+
+            return row;
+        }
+
+        /// Updates the right-hand details panel to match whatever's currently selected in
+        /// the grid, or shows the placeholder if nothing is selected. Reads password reveal
+        /// state from the same passwordRevealTracker the grid itself uses, so the two always
+        /// agree with each other.
+        private void RefreshDetailsPanel()
+        {
+            if (!(dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount))
+            {
+                detailsContentPanel.Visible = false;
+                rightDetailsPlaceholder.Visible = true;
+                return;
+            }
+
+            rightDetailsPlaceholder.Visible = false;
+            detailsContentPanel.Visible = true;
+
+            bool isRevealed = passwordRevealTracker.IsRevealed(selectedAccount);
+
+            lblDetailsService.Text = selectedAccount.Service;
+            lblDetailsUsername.Text = selectedAccount.Username;
+            lblDetailsPassword.Text = isRevealed ? selectedAccount.Password : "••••••••";
+            btnDetailsTogglePassword.Text = isRevealed ? "Hide" : "Show";
+            lblDetailsUrl.Text = string.IsNullOrEmpty(selectedAccount.Url) ? "-" : selectedAccount.Url;
+            txtDetailsNotes.Text = selectedAccount.Notes;
+            lblDetailsCreated.Text = selectedAccount.CreatedAt is DateTime created ? created.ToString("g") : "-";
+            lblDetailsModified.Text = selectedAccount.ModifiedAt is DateTime modified ? modified.ToString("g") : "-";
         }
 
         private void Accounts_ListChanged(object sender, ListChangedEventArgs e)
