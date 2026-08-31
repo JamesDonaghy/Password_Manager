@@ -27,10 +27,25 @@ namespace PasswordManager
         private IEnumerable<Account> lastAccounts = Enumerable.Empty<Account>();
         private string lastSearchText = string.Empty;
 
+        // Columns the user has chosen to hide via the header's "Configure Columns..." menu,
+        // by underlying column name (i.e. the Account property name). Persists here across
+        // refreshes since AutoGenerateColumns rebuilds the column objects from scratch every
+        // time DataSource is reassigned - the grid itself has nowhere lasting to remember it.
+        private readonly HashSet<string> hiddenColumns = new HashSet<string>();
+
+        // Shown when right-clicking a column header, KeePass-style. Assigned directly to
+        // each column's HeaderCell.ContextMenuStrip (rather than left as the grid's general
+        // ContextMenuStrip) so it replaces the row context menu specifically over the header
+        // row, without interfering with right-clicking an actual row.
+        private readonly ContextMenuStrip headerContextMenu;
+
         public AccountGridPresenter(DataGridView grid, Func<Account, bool> isPasswordRevealed)
         {
             this.grid = grid;
             this.isPasswordRevealed = isPasswordRevealed;
+
+            this.headerContextMenu = new ContextMenuStrip();
+            this.headerContextMenu.Items.Add("Configure Columns...", null, ConfigureColumns_Click);
 
             // Masks the Password column's displayed text unless the row has been revealed,
             // and formats the Created/Modified date columns.
@@ -72,7 +87,7 @@ namespace PasswordManager
             grid.DataSource = new BindingList<Account>(filtered.ToList());
 
             // Columns are regenerated whenever DataSource is reassigned (AutoGenerateColumns
-            // is on), so both of these need reapplying every time, not just once at startup.
+            // is on), so all of these need reapplying every time, not just once at startup.
             foreach (DataGridViewColumn column in grid.Columns)
             {
                 // Programmatic means DataGridView won't attempt its own automatic sorting -
@@ -82,6 +97,13 @@ namespace PasswordManager
                 column.HeaderCell.SortGlyphDirection = column.Name == sortColumn
                     ? (sortAscending ? SortOrder.Ascending : SortOrder.Descending)
                     : SortOrder.None;
+
+                // Re-apply whatever show/hide choice the user last made in Configure Columns.
+                column.Visible = !hiddenColumns.Contains(column.Name);
+
+                // Right-click a header for the Configure Columns menu, same as left-click is
+                // sorting - assigned per-column since HeaderCell is recreated along with it.
+                column.HeaderCell.ContextMenuStrip = headerContextMenu;
             }
 
             // Rows also get rebuilt every time DataSource changes, so re-highlight stale
@@ -133,6 +155,11 @@ namespace PasswordManager
 
         private void Grid_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
         {
+            if (e.Button != MouseButtons.Left)
+            {
+                return; // Right-click is handled by headerContextMenu (Configure Columns...) instead
+            }
+
             string columnName = grid.Columns[e.ColumnIndex].Name;
 
             if (columnName == nameof(Account.Password))
@@ -151,6 +178,45 @@ namespace PasswordManager
             }
 
             RefreshInternal(); // Re-applies the (now-changed) sort using the last-seen accounts/search text
+        }
+
+        private void ConfigureColumns_Click(object sender, EventArgs e)
+        {
+            // Built from the grid's live columns (name + current header text + current
+            // visibility) rather than a hardcoded list, so the dialog always matches
+            // whatever's actually on the grid - nothing to keep in sync by hand.
+            var columnStates = grid.Columns
+                .Cast<DataGridViewColumn>()
+                .Select(c => (Name: c.Name, Header: c.HeaderText, Visible: c.Visible))
+                .ToList();
+
+            using (var configForm = new ColumnConfigForm(columnStates))
+            {
+                if (configForm.ShowDialog(grid.FindForm()) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                hiddenColumns.Clear();
+                foreach (var entry in configForm.SelectedVisibility)
+                {
+                    if (!entry.Value)
+                    {
+                        hiddenColumns.Add(entry.Key);
+                    }
+
+                    // Apply immediately to the live columns rather than waiting for the next
+                    // Refresh() - there's no reason to force a full filter+sort+rebind just
+                    // to toggle visibility, and this keeps the current selection/scroll
+                    // position intact. The string indexer returns null instead of throwing
+                    // when a column by that name doesn't exist.
+                    var liveColumn = grid.Columns[entry.Key];
+                    if (liveColumn != null)
+                    {
+                        liveColumn.Visible = entry.Value;
+                    }
+                }
+            }
         }
 
         private void Grid_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
