@@ -658,11 +658,9 @@ namespace PasswordManager
 
             using (var editEntryForm = new AddEntryForm(selectedAccount))
             {
-                var mousePos = Control.MousePosition;
-                editEntryForm.StartPosition = FormStartPosition.Manual;
-                editEntryForm.Location = new System.Drawing.Point(mousePos.X, mousePos.Y);
+                editEntryForm.StartPosition = FormStartPosition.CenterParent;
 
-                if (editEntryForm.ShowDialog() == DialogResult.OK)
+                if (editEntryForm.ShowDialog(this) == DialogResult.OK)
                 {
                     selectedAccount.Service = editEntryForm.Service;
                     selectedAccount.Username = editEntryForm.Username;
@@ -685,11 +683,13 @@ namespace PasswordManager
                 return;
             }
 
-            var confirmResult = MessageBox.Show(
+            DialogResult confirmResult;
+            using (var confirmDialog = new ConfirmationDialog(
                 $"Delete the entry for '{selectedAccount.Service}'? This cannot be undone.",
-                "Confirm Delete",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
+                "Confirm Delete"))
+            {
+                confirmResult = confirmDialog.ShowDialog(this);
+            }
 
             if (confirmResult == DialogResult.Yes)
             {
@@ -770,13 +770,15 @@ namespace PasswordManager
                     return;
                 }
 
-                var confirmResult = MessageBox.Show(
+                DialogResult confirmResult;
+                using (var confirmDialog = new ConfirmationDialog(
                     "This will replace your current vault with the selected backup. Your " +
                     "current vault will be kept as a .bak file, but the app needs to restart " +
                     "afterward to safely load the restored data. Continue?",
-                    "Confirm Restore",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning);
+                    "Confirm Restore"))
+                {
+                    confirmResult = confirmDialog.ShowDialog(this);
+                }
 
                 if (confirmResult != DialogResult.Yes)
                 {
