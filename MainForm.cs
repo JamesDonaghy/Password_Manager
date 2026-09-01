@@ -112,41 +112,21 @@ namespace PasswordManager
             {
                 Dock = DockStyle.Fill,
                 BackColor = AppTheme.PanelBackground,
-                BorderStyle = BorderStyle.FixedSingle
+                BorderStyle = BorderStyle.None
             };
 
-            var btnSettings = new Button
+            // Thin hairline in place of the previous FixedSingle 3D border - separates
+            // the nav panel from the grid without the harsh system-drawn bevel.
+            var leftNavDivider = new Panel
             {
-                Text = "Change Master Password",
-                Dock = DockStyle.Top,
-                Height = 40,
-                FlatStyle = FlatStyle.Flat,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                Padding = new Padding(10, 0, 0, 0)
+                Dock = DockStyle.Right,
+                Width = 1,
+                BackColor = AppTheme.Border
             };
-            btnSettings.Click += ChangeMasterPassword_Click; // Same handler as the existing Settings menu item
 
-            var btnRestoreVault = new Button
-            {
-                Text = "Restore Vault",
-                Dock = DockStyle.Top,
-                Height = 40,
-                FlatStyle = FlatStyle.Flat,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                Padding = new Padding(10, 0, 0, 0)
-            };
-            btnRestoreVault.Click += RestoreVault_Click; // Same handler as the existing menu item
-
-            var btnBackupVault = new Button
-            {
-                Text = "Backup Vault",
-                Dock = DockStyle.Top,
-                Height = 40,
-                FlatStyle = FlatStyle.Flat,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                Padding = new Padding(10, 0, 0, 0)
-            };
-            btnBackupVault.Click += BackupVault_Click; // Same handler as the existing menu item
+            var btnSettings = CreateNavButton("Change Master Password", ChangeMasterPassword_Click); // Same handler as the existing Settings menu item
+            var btnRestoreVault = CreateNavButton("Restore Vault", RestoreVault_Click); // Same handler as the existing menu item
+            var btnBackupVault = CreateNavButton("Backup Vault", BackupVault_Click); // Same handler as the existing menu item
 
             // Stacked Dock=Top siblings render in reverse of the order added (last added
             // ends up closest to the top edge) - see the earlier menu bar/search box fix
@@ -154,6 +134,7 @@ namespace PasswordManager
             this.leftNavPanel.Controls.Add(btnSettings);
             this.leftNavPanel.Controls.Add(btnRestoreVault);
             this.leftNavPanel.Controls.Add(btnBackupVault);
+            this.leftNavPanel.Controls.Add(leftNavDivider);
 
             // Middle column: today's search box + grid, unchanged - just moved into a
             // narrower column instead of spanning the whole window. Same fill/search/sort/
@@ -391,6 +372,29 @@ namespace PasswordManager
             dgvAccounts.AllowUserToAddRows = false;
             dgvAccounts.AllowUserToDeleteRows = false;
             dgvAccounts.ReadOnly = true;
+        }
+
+        /// Builds one left-nav button with the app's flat, hover-tinted style, keeping
+        /// all three nav buttons visually identical without repeating the same setup.
+        private static Button CreateNavButton(string text, EventHandler onClick)
+        {
+            var button = new Button
+            {
+                Text = text,
+                Dock = DockStyle.Top,
+                Height = 42,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = AppTheme.PanelBackground,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Padding = new Padding(14, 0, 0, 0),
+                Cursor = Cursors.Hand
+            };
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
+            button.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
+            button.Click += onClick;
+            return button;
         }
 
         /// Builds one "Caption: value [buttons]" row for the details panel, keeping every

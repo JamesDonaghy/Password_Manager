@@ -20,12 +20,16 @@ namespace PasswordManager
         // (nav rail, details pane) without needing a hard border to separate them.
         public static readonly Color PanelBackground = Color.FromArgb(0xFA, 0xFA, 0xFC);
 
-        // Subtle divider/border colour - for use in later updates once panel borders
-        // are revisited; not applied yet in this pass.
+        // Subtle divider/border colour - for hairline separators between regions
+        // (e.g. the nav panel/content divider) instead of WinForms' default 3D borders.
         public static readonly Color Border = Color.FromArgb(0xE3, 0xE5, 0xEA);
 
         // Single accent colour, used sparingly (primary actions, selection, emphasis).
         public static readonly Color Accent = Color.FromArgb(0x6C, 0x5C, 0xE7);
+
+        // Light tint of the accent colour - for hover/selected backgrounds where the
+        // full accent colour would be too strong (e.g. nav item hover state).
+        public static readonly Color AccentSubtle = Color.FromArgb(0xED, 0xEB, 0xFC);
 
         public static readonly Color TextPrimary = Color.FromArgb(0x20, 0x22, 0x2A);
         public static readonly Color TextSecondary = Color.FromArgb(0x6B, 0x72, 0x80);
