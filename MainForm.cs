@@ -111,7 +111,7 @@ namespace PasswordManager
             this.leftNavPanel = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = System.Drawing.Color.WhiteSmoke,
+                BackColor = AppTheme.PanelBackground,
                 BorderStyle = BorderStyle.FixedSingle
             };
 
@@ -167,7 +167,7 @@ namespace PasswordManager
             this.rightDetailsPanel = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = System.Drawing.Color.WhiteSmoke,
+                BackColor = AppTheme.PanelBackground,
                 BorderStyle = BorderStyle.FixedSingle
             };
             this.rightDetailsPlaceholder = new Label
@@ -175,7 +175,7 @@ namespace PasswordManager
                 Text = "Select an entry to see details",
                 Dock = DockStyle.Fill,
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                ForeColor = System.Drawing.Color.Gray
+                ForeColor = AppTheme.TextSecondary
             };
 
             this.detailsContentPanel = new Panel { Dock = DockStyle.Fill, Visible = false };
@@ -187,7 +187,8 @@ namespace PasswordManager
                 // Dock = Fill and AutoSize off, the row had no reliable height to measure
                 // against and ended up too short, clipping the bottom of the text.
                 AutoSize = true,
-                Font = new System.Drawing.Font("Arial", 14, System.Drawing.FontStyle.Bold),
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
                 Margin = new Padding(10, 10, 0, 4)
             };
@@ -315,6 +316,8 @@ namespace PasswordManager
             this.Controls.Add(this.menuStrip);
 
             this.Text = "Password Manager";
+            this.Font = AppTheme.Base; // Applies to every child control that doesn't set its own Font
+            this.BackColor = AppTheme.Background;
             this.Size = new System.Drawing.Size(1190, 650); // Wider than before - right column grew by 90px, so the window grows to match rather than squeezing the grid
             this.MinimumSize = new System.Drawing.Size(790, 450); // Keep all three columns usable at small sizes
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -417,7 +420,8 @@ namespace PasswordManager
             {
                 Text = caption,
                 AutoSize = true,
-                Font = new System.Drawing.Font("Arial", 9, System.Drawing.FontStyle.Bold),
+                Font = AppTheme.Caption,
+                ForeColor = AppTheme.TextSecondary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
                 Margin = new Padding(0, 3, 8, 0)
             };
