@@ -20,6 +20,11 @@ namespace PasswordManager
         // (nav rail, details pane) without needing a hard border to separate them.
         public static readonly Color PanelBackground = Color.FromArgb(0xFA, 0xFA, 0xFC);
 
+        // Distinct fill for interactive input surfaces (search box, future text fields)
+        // that need to read as a clickable field against Background/PanelBackground,
+        // rather than blending into whichever panel they sit on.
+        public static readonly Color Surface = Color.White;
+
         // Subtle divider/border colour - for hairline separators between regions
         // (e.g. the nav panel/content divider) instead of WinForms' default 3D borders.
         public static readonly Color Border = Color.FromArgb(0xE3, 0xE5, 0xEA);

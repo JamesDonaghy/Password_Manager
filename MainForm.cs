@@ -80,8 +80,47 @@ namespace PasswordManager
             this.menuStrip.Items.Add(settingsMenu);
             this.MainMenuStrip = this.menuStrip;
 
-            this.txtSearch = new TextBox { PlaceholderText = "Search by service, username, URL, or notes...", Dock = DockStyle.Top };
+            this.txtSearch = new TextBox
+            {
+                PlaceholderText = "Search by service, username, URL, or notes...",
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.None,
+                BackColor = AppTheme.Surface,
+                Font = AppTheme.Base
+            };
             this.txtSearch.TextChanged += TxtSearch_TextChanged;
+
+            // A borderless TextBox can't show its own padding/border - a 1px coloured
+            // outer panel plus a padded inner panel gives the inset "search field" look
+            // (matching the reference apps) without an owner-drawn control. Same hairline-
+            // via-BackColor trick used for the nav panel divider. The inset panel uses the
+            // same white Surface colour as the TextBox itself (not the page background),
+            // so the padding and the text field read as one uniform white field rather
+            // than a white box sitting inside a mismatched gutter.
+            var searchInset = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(10, 6, 10, 6)
+            };
+            searchInset.Controls.Add(this.txtSearch);
+
+            var searchBorder = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 38,
+                Padding = new Padding(1),
+                BackColor = AppTheme.Border
+            };
+            searchBorder.Controls.Add(searchInset);
+
+            // Empty spacer so the search field doesn't sit flush against the grid below it.
+            var searchSpacer = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 12,
+                BackColor = AppTheme.Background
+            };
 
             // Right-clicking a row doesn't select it by default in a DataGridView, so without
             // this, Edit/Delete could act on whatever row was last left-clicked instead of the
@@ -136,12 +175,14 @@ namespace PasswordManager
             this.leftNavPanel.Controls.Add(btnBackupVault);
             this.leftNavPanel.Controls.Add(leftNavDivider);
 
-            // Middle column: today's search box + grid, unchanged - just moved into a
-            // narrower column instead of spanning the whole window. Same fill/search/sort/
-            // reveal/copy behavior as before.
-            var middlePanel = new Panel { Dock = DockStyle.Fill };
+            // Middle column: search box + grid. Layout/columns unchanged from the original
+            // three-column split - just moved into a narrower column instead of spanning
+            // the whole window. Same fill/search/sort/reveal/copy behavior as before; only
+            // the search box's own appearance and the spacing around it are new here.
+            var middlePanel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background, Padding = new Padding(16, 14, 16, 0) };
             middlePanel.Controls.Add(this.dgvAccounts);
-            middlePanel.Controls.Add(this.txtSearch);
+            middlePanel.Controls.Add(searchSpacer);
+            middlePanel.Controls.Add(searchBorder);
 
             // Right column: entry details. Content is built once here and just updated
             // in-place on selection change, rather than rebuilt each time.
