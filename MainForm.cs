@@ -361,6 +361,39 @@ namespace PasswordManager
 
             dgvAccounts.Dock = DockStyle.Fill;
             dgvAccounts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+            // --- Grid appearance ---
+            // Grid-level styles (as opposed to per-column ones) survive AccountGridPresenter
+            // rebinding DataSource on every Refresh(), so these only need setting once here.
+            dgvAccounts.BackgroundColor = AppTheme.Background;
+            dgvAccounts.BorderStyle = BorderStyle.None;
+            dgvAccounts.GridColor = AppTheme.Border;
+            dgvAccounts.RowTemplate.Height = 32; // A bit more breathing room than the ~22px default
+
+            // Full-row highlighting instead of the default single-cell selection reads as far
+            // more "list of entries, pick one" - closer to the reference apps - and the row
+            // header gutter (with its little selector arrow) was pure WinForms chrome that
+            // wasn't doing anything for this app, so it's hidden rather than restyled.
+            dgvAccounts.RowHeadersVisible = false;
+            dgvAccounts.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+
+            dgvAccounts.DefaultCellStyle.SelectionBackColor = AppTheme.AccentSubtle;
+            dgvAccounts.DefaultCellStyle.SelectionForeColor = AppTheme.TextPrimary;
+            dgvAccounts.DefaultCellStyle.ForeColor = AppTheme.TextPrimary;
+
+            // EnableHeadersVisualStyles must be off for ColumnHeadersDefaultCellStyle to take
+            // effect at all - otherwise Windows' own visual-styles renderer draws the header
+            // and ignores these colours entirely.
+            dgvAccounts.EnableHeadersVisualStyles = false;
+            dgvAccounts.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            dgvAccounts.ColumnHeadersHeight = 36;
+            dgvAccounts.ColumnHeadersDefaultCellStyle.BackColor = AppTheme.PanelBackground;
+            dgvAccounts.ColumnHeadersDefaultCellStyle.ForeColor = AppTheme.TextSecondary;
+            dgvAccounts.ColumnHeadersDefaultCellStyle.Font = AppTheme.Caption; // Reuses the same caption style as the details panel's field labels
+            dgvAccounts.ColumnHeadersDefaultCellStyle.SelectionBackColor = AppTheme.PanelBackground; // Headers aren't selectable rows - keep them looking static, not "selected"
+            dgvAccounts.ColumnHeadersDefaultCellStyle.SelectionForeColor = AppTheme.TextSecondary;
+            dgvAccounts.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+
             gridPresenter.Refresh(accounts, txtSearch.Text); // Starts unfiltered since txtSearch is empty
 
             // Entries are only ever added/edited through AddEntryForm (via the right-click
