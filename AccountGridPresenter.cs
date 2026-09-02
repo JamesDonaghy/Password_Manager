@@ -31,7 +31,9 @@ namespace PasswordManager
         // by underlying column name (i.e. the Account property name). Persists here across
         // refreshes since AutoGenerateColumns rebuilds the column objects from scratch every
         // time DataSource is reassigned - the grid itself has nowhere lasting to remember it.
-        private readonly HashSet<string> hiddenColumns = new HashSet<string>();
+        // Loaded from ColumnVisibilityStore up front so the choice also survives an app
+        // restart, and saved back to it every time it changes (see ConfigureColumns_Click).
+        private readonly HashSet<string> hiddenColumns = new HashSet<string>(ColumnVisibilityStore.LoadHiddenColumns());
 
         // Shown when right-clicking a column header, KeePass-style. Assigned directly to
         // each column's HeaderCell.ContextMenuStrip (rather than left as the grid's general
@@ -216,6 +218,8 @@ namespace PasswordManager
                         liveColumn.Visible = entry.Value;
                     }
                 }
+
+                ColumnVisibilityStore.SaveHiddenColumns(hiddenColumns);
             }
         }
 
