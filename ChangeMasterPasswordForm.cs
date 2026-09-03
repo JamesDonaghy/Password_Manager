@@ -21,51 +21,69 @@ namespace PasswordManager
         public ChangeMasterPasswordForm()
         {
             this.Text = "Change Master Password";
-            this.Size = new System.Drawing.Size(450, 500);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
+            this.StartPosition = FormStartPosition.CenterScreen; // No owner is passed to ShowDialog() at the call site, so CenterParent wouldn't have anything to center on
+            this.BackColor = AppTheme.Background;
+            this.Font = AppTheme.Base;
+            this.Size = new System.Drawing.Size(440, 420);
 
-            txtCurrentPassword = new TextBox { PlaceholderText = "Current Master Password", PasswordChar = '*', TextAlign = HorizontalAlignment.Center, Width = 300 };
-            txtNewPassword = new TextBox { PlaceholderText = "New Master Password", PasswordChar = '*', TextAlign = HorizontalAlignment.Center, Width = 300 };
-            txtRepeatNewPassword = new TextBox { PlaceholderText = "Repeat New Master Password", PasswordChar = '*', TextAlign = HorizontalAlignment.Center, Width = 300 };
+            const int inputHeight = 30;
 
+            txtCurrentPassword = new TextBox { PlaceholderText = "Current Master Password", PasswordChar = '*', BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
+            txtNewPassword = new TextBox { PlaceholderText = "New Master Password", PasswordChar = '*', BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
+            txtRepeatNewPassword = new TextBox { PlaceholderText = "Repeat New Master Password", PasswordChar = '*', BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
+
+            // Fixed-height (rather than AutoSize) so validation messages appearing/
+            // disappearing don't reflow or resize the rest of the dialog around them.
             lblMessage = new Label
             {
-                ForeColor = System.Drawing.Color.Red,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                AutoSize = true,
-                MaximumSize = new System.Drawing.Size(300, 0)
+                Dock = DockStyle.Top,
+                Height = 36,
+                ForeColor = System.Drawing.Color.IndianRed, // Same semantic red as AddEntryForm's mismatch/weak-strength feedback
+                Font = AppTheme.Base,
+                TextAlign = System.Drawing.ContentAlignment.TopLeft
             };
 
-            btnSave = new Button { Text = "Change Password", Width = 300 };
+            btnSave = DialogControls.CreatePrimaryButton("Change Password", 150, 32);
             btnSave.Click += BtnSave_Click;
 
-            btnCancel = new Button { Text = "Cancel", Width = 300 };
+            btnCancel = DialogControls.CreateSecondaryButton("Cancel", 96, 32);
             btnCancel.Click += (sender, e) => { this.DialogResult = DialogResult.Cancel; this.Close(); };
 
-            FlowLayoutPanel flowPanel = new FlowLayoutPanel
+            var lblFormTitle = new Label
             {
-                Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.TopDown,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                BackColor = System.Drawing.Color.Transparent,
-                Padding = new Padding(10)
+                Text = "Change Master Password",
+                Dock = DockStyle.Top,
+                Height = 36,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft,
+                Padding = new Padding(20, 0, 0, 6)
             };
 
-            flowPanel.Controls.Add(lblMessage);
-            flowPanel.Controls.Add(txtCurrentPassword);
-            flowPanel.Controls.Add(txtNewPassword);
-            flowPanel.Controls.Add(txtRepeatNewPassword);
-            flowPanel.Controls.Add(btnSave);
-            flowPanel.Controls.Add(btnCancel);
+            var currentGroup = DialogControls.CreateFieldGroup("Current Master Password", txtCurrentPassword, inputHeight);
+            var newGroup = DialogControls.CreateFieldGroup("New Master Password", txtNewPassword, inputHeight);
+            var repeatGroup = DialogControls.CreateFieldGroup("Repeat New Master Password", txtRepeatNewPassword, inputHeight);
 
-            this.Controls.Add(flowPanel);
+            var contentPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20, 2, 20, 2), BackColor = AppTheme.Background };
 
-            // Center the FlowLayoutPanel manually
-            flowPanel.Anchor = AnchorStyles.None;
-            flowPanel.Left = (this.ClientSize.Width - flowPanel.Width) / 2;
-            flowPanel.Top = (this.ClientSize.Height - flowPanel.Height) / 2;
+            var actionPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Padding = new Padding(20, 8, 20, 12), BackColor = AppTheme.Background };
+            btnCancel.Margin = new Padding(0, 3, 0, 3);
+            btnSave.Margin = new Padding(10, 3, 0, 3);
+            actionPanel.Controls.Add(btnCancel);
+            actionPanel.Controls.Add(btnSave);
+
+            // Dock=Top siblings stack in reverse of add order (last added ends up closest to
+            // the top edge) - same quirk called out in MainForm/AddEntryForm.
+            contentPanel.Controls.Add(repeatGroup);
+            contentPanel.Controls.Add(newGroup);
+            contentPanel.Controls.Add(currentGroup);
+            contentPanel.Controls.Add(lblMessage);
+
+            Controls.Add(contentPanel);
+            Controls.Add(actionPanel);
+            Controls.Add(lblFormTitle);
 
             txtCurrentPassword.KeyDown += TextBox_KeyDown;
             txtNewPassword.KeyDown += TextBox_KeyDown;

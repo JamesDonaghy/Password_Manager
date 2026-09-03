@@ -111,19 +111,10 @@ namespace PasswordManager
             btnTogglePasswordVisibility = CreateIconButton("👁️", iconSize); // Eye icon
 
             // Save/Cancel as proper labeled buttons instead of emoji-only icons, matching
-            // the reference apps' dialog buttons. Save uses the app's first "primary button"
-            // treatment (solid accent fill) - later dialogs should reuse this same style
-            // for their primary action rather than inventing a new one.
-            btnSave = new Button { Text = "Save", Width = 96, Height = 32, FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = System.Drawing.Color.White, Font = AppTheme.Base, Cursor = Cursors.Hand };
-            btnSave.FlatAppearance.BorderSize = 0;
-            btnSave.FlatAppearance.MouseOverBackColor = AppTheme.AccentHover;
-            btnSave.FlatAppearance.MouseDownBackColor = AppTheme.AccentHover;
-
-            btnCancel = new Button { Text = "Cancel", Width = 96, Height = 32, FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary, Font = AppTheme.Base, Cursor = Cursors.Hand };
-            btnCancel.FlatAppearance.BorderSize = 1;
-            btnCancel.FlatAppearance.BorderColor = AppTheme.Border;
-            btnCancel.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
-            btnCancel.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
+            // the reference apps' dialog buttons. Uses the shared primary/secondary button
+            // helpers (DialogControls) so later dialogs reuse this exact same look.
+            btnSave = DialogControls.CreatePrimaryButton("Save", 96, 32);
+            btnCancel = DialogControls.CreateSecondaryButton("Cancel", 96, 32);
 
             // Buttons for symbols and numbers - active/inactive now shown via the theme's
             // accent tint instead of ad-hoc LightGreen/LightCoral, and set to match their
@@ -487,59 +478,12 @@ namespace PasswordManager
         /// a bare input (a single-field row) or a small Panel containing an input plus
         /// inline buttons (e.g. the password row).
         private static Panel CreateFieldGroup(string labelText, Control fieldRow, int fieldHeight)
-        {
-            const int labelHeight = 18;
-            const int groupBottomMargin = 10;
-
-            var wrapper = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = labelHeight + fieldHeight + groupBottomMargin,
-                Padding = new Padding(0, 0, 0, groupBottomMargin),
-                BackColor = AppTheme.Background
-            };
-
-            var label = new Label
-            {
-                Text = labelText,
-                Dock = DockStyle.Top,
-                Height = labelHeight,
-                Font = AppTheme.Caption,
-                ForeColor = AppTheme.TextSecondary,
-                TextAlign = System.Drawing.ContentAlignment.BottomLeft
-            };
-
-            fieldRow.Dock = DockStyle.Top;
-            fieldRow.Height = fieldHeight;
-
-            // Dock=Top siblings stack in reverse of add order (last added ends up closest to
-            // the top edge) - same quirk called out in MainForm - so the field goes in first.
-            wrapper.Controls.Add(fieldRow);
-            wrapper.Controls.Add(label);
-
-            return wrapper;
-        }
+            => DialogControls.CreateFieldGroup(labelText, fieldRow, fieldHeight);
 
         /// Builds one small flat icon button (Show/Generate/Manage/etc.), styled consistently
         /// with MainForm's nav buttons - flat, borderless, accent-tinted hover.
         private static Button CreateIconButton(string icon, int size)
-        {
-            var button = new Button
-            {
-                Text = icon,
-                Dock = DockStyle.Right,
-                Width = size,
-                Height = size,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = AppTheme.PanelBackground,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 11f),
-                Cursor = Cursors.Hand
-            };
-            button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
-            button.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
-            return button;
-        }
+            => DialogControls.CreateIconButton(icon, size);
 
         private void RefreshUsernameSuggestions()
         {

@@ -785,7 +785,7 @@ namespace PasswordManager
             using (var changeForm = new ChangeMasterPasswordForm())
             {
                 var mousePos = Control.MousePosition;
-                changeForm.StartPosition = FormStartPosition.Manual;
+                changeForm.StartPosition = FormStartPosition.CenterParent;
                 changeForm.Location = new System.Drawing.Point(mousePos.X, mousePos.Y);
 
                 if (changeForm.ShowDialog() != DialogResult.OK)
