@@ -42,32 +42,34 @@ namespace PasswordManager
 
         public AddEntryForm(Account existingAccount = null)
         {
-            // Set fixed size
-            this.Size = new System.Drawing.Size(700, 600);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
+            this.BackColor = AppTheme.Background;
+            this.Font = AppTheme.Base;
 
-            // Initialize text boxes with half the width of the form
-            int textBoxWidth = this.ClientSize.Width / 2;
-            int buttonHeight = 30; // Smaller button height
-            int buttonWidth = 40; // Smaller button width
+            // Narrower and shorter, closely matching the tightened content's actual height
+            // rather than leaving a large buffer below Notes - the content area is still
+            // scrollable as a safety net in case any platform/DPI combination needs a
+            // little more room than expected, rather than fields ever getting clipped.
+            this.Size = new System.Drawing.Size(440, 560);
 
-            // Set a larger font size
-            var font = new System.Drawing.Font("Arial", 10);
+            const int inputHeight = 30;
+            const int iconSize = 30;
 
-            txtService = new TextBox { PlaceholderText = "Service Name", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font };
-            txtUsername = new ComboBox { Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font, DropDownStyle = ComboBoxStyle.DropDown };
+            txtService = new TextBox { PlaceholderText = "Service Name", BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
+            txtUsername = new ComboBox { Font = AppTheme.Base, DropDownStyle = ComboBoxStyle.DropDown };
             RefreshUsernameSuggestions(); // Builds suggestions from UsernameSuggestionsStore
 
-            btnManageUsernames = new Button { Text = "👤", Width = buttonWidth, Height = buttonHeight, Font = font }; // Manage suggested usernames
+            btnManageUsernames = CreateIconButton("👤", iconSize); // Manage suggested usernames
             btnManageUsernames.Click += BtnManageUsernames_Click;
-            txtPassword = new TextBox { PlaceholderText = "Password", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, PasswordChar = '*', Font = font };
-            txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Password", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, PasswordChar = '*', Font = font, Enabled = false }; // Repeat password field disabled by default
-            txtUrl = new TextBox { PlaceholderText = "URL", Dock = DockStyle.Top, Width = textBoxWidth, Height = buttonHeight + 10, Font = font }; // URL field
-            txtNotes = new TextBox { PlaceholderText = "Notes", Dock = DockStyle.Top, Multiline = true, Width = textBoxWidth, Height = 80, Font = font };
+
+            txtPassword = new TextBox { PlaceholderText = "Password", BorderStyle = BorderStyle.FixedSingle, PasswordChar = '*', Font = AppTheme.Base };
+            txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Password", BorderStyle = BorderStyle.FixedSingle, PasswordChar = '*', Font = AppTheme.Base, Enabled = false }; // Repeat password field disabled by default
+            txtUrl = new TextBox { PlaceholderText = "URL", BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
+            txtNotes = new TextBox { PlaceholderText = "Notes", BorderStyle = BorderStyle.FixedSingle, Multiline = true, Font = AppTheme.Base };
 
             // Password length slider
-            lblCurrentLength = new Label { Text = "15", Dock = DockStyle.Top, Font = font, Visible = false }; // Label to show current length, initially hidden
+            lblCurrentLength = new Label { Text = "15", Dock = DockStyle.Left, Width = 30, Font = AppTheme.Base, ForeColor = AppTheme.TextPrimary, Visible = false }; // Label to show current length, initially hidden
             sliderPasswordLength = new TrackBar
             {
                 Minimum = 6,
@@ -87,8 +89,11 @@ namespace PasswordManager
                 RegeneratePassword(); // Regenerate password when slider changes
             };
 
-            // Toggle button for showing/hiding the length slider with an icon
-            btnToggleLengthSlider = new Button { Text = "🔧", Width = buttonWidth, Height = buttonHeight, Font = font, BackColor = System.Drawing.Color.LightBlue }; // Wrench icon
+            // Toggle button for showing/hiding the length slider with an icon. Styled the
+            // same as the other icon buttons rather than the previous one-off LightBlue -
+            // it's a "show more options" disclosure, not an on/off state like symbols/numbers,
+            // so it doesn't get their active/inactive treatment.
+            btnToggleLengthSlider = CreateIconButton("🔧", iconSize);
             btnToggleLengthSlider.Click += (sender, e) =>
             {
                 sliderPasswordLength.Visible = !sliderPasswordLength.Visible;
@@ -102,27 +107,45 @@ namespace PasswordManager
             };
 
             // Create buttons for password actions with matching sizes
-            btnGeneratePassword = new Button { Text = "🔄", Width = buttonWidth, Height = buttonHeight, Font = font }; // Generate icon
-            btnTogglePasswordVisibility = new Button { Text = "👁️", Width = buttonWidth, Height = buttonHeight, Font = font }; // Eye icon
-            btnSave = new Button { Text = "💾", Width = buttonWidth, Height = buttonHeight, Font = font }; // Save icon
-            btnCancel = new Button { Text = "❌", Width = buttonWidth, Height = buttonHeight, Font = font }; // Cancel icon
+            btnGeneratePassword = CreateIconButton("🔄", iconSize); // Generate icon
+            btnTogglePasswordVisibility = CreateIconButton("👁️", iconSize); // Eye icon
 
-            // Buttons for symbols and numbers
-            btnToggleSymbols = new Button { Text = "⚙️", Width = buttonWidth, Height = buttonHeight, BackColor = System.Drawing.Color.LightGreen, Font = font }; // Gear icon for symbols
-            btnToggleNumbers = new Button { Text = "🔢", Width = buttonWidth, Height = buttonHeight, BackColor = System.Drawing.Color.LightGreen, Font = font }; // Numbers icon
+            // Save/Cancel as proper labeled buttons instead of emoji-only icons, matching
+            // the reference apps' dialog buttons. Save uses the app's first "primary button"
+            // treatment (solid accent fill) - later dialogs should reuse this same style
+            // for their primary action rather than inventing a new one.
+            btnSave = new Button { Text = "Save", Width = 96, Height = 32, FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = System.Drawing.Color.White, Font = AppTheme.Base, Cursor = Cursors.Hand };
+            btnSave.FlatAppearance.BorderSize = 0;
+            btnSave.FlatAppearance.MouseOverBackColor = AppTheme.AccentHover;
+            btnSave.FlatAppearance.MouseDownBackColor = AppTheme.AccentHover;
+
+            btnCancel = new Button { Text = "Cancel", Width = 96, Height = 32, FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary, Font = AppTheme.Base, Cursor = Cursors.Hand };
+            btnCancel.FlatAppearance.BorderSize = 1;
+            btnCancel.FlatAppearance.BorderColor = AppTheme.Border;
+            btnCancel.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
+            btnCancel.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
+
+            // Buttons for symbols and numbers - active/inactive now shown via the theme's
+            // accent tint instead of ad-hoc LightGreen/LightCoral, and set to match their
+            // actual starting state (includeSymbols/includeNumbers both default true) rather
+            // than only updating on the first click as before.
+            btnToggleSymbols = CreateIconButton("⚙️", iconSize); // Gear icon for symbols
+            btnToggleSymbols.BackColor = AppTheme.AccentSubtle;
+            btnToggleNumbers = CreateIconButton("🔢", iconSize); // Numbers icon
+            btnToggleNumbers.BackColor = AppTheme.AccentSubtle;
 
             // Password strength meter: a bordered bar that fills proportionally and changes
             // color, paired with a text label since color alone isn't accessible to everyone.
-            pnlStrengthBarContainer = new Panel { Width = 200, Height = 14, BorderStyle = BorderStyle.FixedSingle };
+            pnlStrengthBarContainer = new Panel { Width = 200, Height = 14, Margin = new Padding(0, 4, 0, 0), BorderStyle = BorderStyle.FixedSingle };
             pnlStrengthBarFill = new Panel
             {
                 Location = new System.Drawing.Point(0, 0),
                 Height = pnlStrengthBarContainer.ClientSize.Height,
                 Width = 0,
-                BackColor = System.Drawing.Color.Gray
+                BackColor = AppTheme.TextSecondary
             };
             pnlStrengthBarContainer.Controls.Add(pnlStrengthBarFill);
-            lblStrengthText = new Label { AutoSize = true, Font = font, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(8, 6, 0, 0) };
+            lblStrengthText = new Label { AutoSize = true, Font = AppTheme.Base, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(8, 4, 0, 0) };
 
             // Add event handlers
             btnGeneratePassword.Click += BtnGeneratePassword_Click;
@@ -136,52 +159,87 @@ namespace PasswordManager
             txtPassword.TextChanged += TxtPassword_TextChanged; // Update strength when password changes
             txtRepeatPassword.TextChanged += TxtRepeatPassword_TextChanged; // Check match on repeat password text change
 
-            // Create a panel for the service and username text boxes
-            var textBoxPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
-            textBoxPanel.Controls.Add(txtService);
-            textBoxPanel.Controls.Add(txtUsername);
-            textBoxPanel.Controls.Add(btnManageUsernames);
+            // Username row: field fills remaining width, manage-usernames button to its right.
+            var usernameRow = new Panel { BackColor = AppTheme.Background };
+            usernameRow.Controls.Add(txtUsername);
+            txtUsername.Dock = DockStyle.Fill;
+            usernameRow.Controls.Add(btnManageUsernames);
 
-            // Create a panel to hold password and action buttons
-            var passwordPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
-            passwordPanel.Controls.Add(txtPassword);
-            passwordPanel.Controls.Add(btnTogglePasswordVisibility);
-            passwordPanel.Controls.Add(btnGeneratePassword);
-            passwordPanel.Controls.Add(btnToggleSymbols); // Add symbols button
-            passwordPanel.Controls.Add(btnToggleNumbers); // Add numbers button
-            passwordPanel.Controls.Add(btnToggleLengthSlider); // Add toggle button for length slider
+            // Password row: field fills remaining width, action icons to its right. Right-
+            // docked siblings render in the SAME order added (unlike Top/Left, where it's
+            // reversed) - the last one added lands flush against the true right edge - so
+            // adding left-to-right in reading order here places them correctly.
+            var passwordRow = new Panel { BackColor = AppTheme.Background };
+            passwordRow.Controls.Add(txtPassword);
+            txtPassword.Dock = DockStyle.Fill;
+            passwordRow.Controls.Add(btnTogglePasswordVisibility);
+            passwordRow.Controls.Add(btnGeneratePassword);
+            passwordRow.Controls.Add(btnToggleSymbols);
+            passwordRow.Controls.Add(btnToggleNumbers);
+            passwordRow.Controls.Add(btnToggleLengthSlider);
 
-            // Create a panel for repeat password and URL fields
-            var repeatUrlPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
-            repeatUrlPanel.Controls.Add(txtRepeatPassword);
-            repeatUrlPanel.Controls.Add(txtUrl);
-
-            // Create a panel for the password strength meter, shown directly below the password row
-            var strengthPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
+            // Strength meter and length slider stay as their own small rows (fixed-size
+            // controls sitting side by side) rather than the label-above-field pattern used
+            // for the real inputs - a FlowLayoutPanel is the simplest fit for that shape.
+            var strengthPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 2, 0, 2), Margin = new Padding(0), BackColor = AppTheme.Background };
             strengthPanel.Controls.Add(pnlStrengthBarContainer);
             strengthPanel.Controls.Add(lblStrengthText);
 
-            // Create a panel for password length
-            var lengthPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
+            var lengthPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 0, 0, 4), Margin = new Padding(0), BackColor = AppTheme.Background };
             lengthPanel.Controls.Add(sliderPasswordLength); // Add slider for password length
             lengthPanel.Controls.Add(lblCurrentLength); // Add current length label
 
-            // Create a panel for save/cancel buttons
-            var actionPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true };
+            // Each real input gets its own full-width row with a caption above it (matching
+            // the reference apps), replacing the old half-width Service+Username and
+            // RepeatPassword+URL pairs - those were only paired up to fit the form's fixed
+            // width, not because the fields are related.
+            var serviceGroup = CreateFieldGroup("Service Name", txtService, inputHeight);
+            var usernameGroup = CreateFieldGroup("Username", usernameRow, inputHeight);
+            var passwordGroup = CreateFieldGroup("Password", passwordRow, inputHeight);
+            var repeatGroup = CreateFieldGroup("Repeat Password", txtRepeatPassword, inputHeight);
+            var urlGroup = CreateFieldGroup("URL", txtUrl, inputHeight);
+            var notesGroup = CreateFieldGroup("Notes", txtNotes, 64);
+
+            var lblFormTitle = new Label
+            {
+                Text = "Add Entry",
+                Dock = DockStyle.Top,
+                Height = 36,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft,
+                Padding = new Padding(20, 0, 0, 6)
+            };
+
+            // Scrollable body so a longer-than-expected layout (different DPI/font metrics)
+            // grows a scrollbar instead of clipping a field - the rest of the form isn't
+            // resizable (FixedDialog), so this is the one safety net for that.
+            var contentScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(20, 2, 20, 2), BackColor = AppTheme.Background };
+
+            var actionPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Padding = new Padding(20, 8, 20, 12), BackColor = AppTheme.Background };
+            // Both buttons need matching top/bottom margin or they render misaligned
+            // vertically within the row - only the left margin should differ, to create
+            // the gap between them.
+            btnCancel.Margin = new Padding(0, 3, 0, 3);
+            btnSave.Margin = new Padding(10, 3, 0, 3);
             actionPanel.Controls.Add(btnCancel);
             actionPanel.Controls.Add(btnSave);
 
-            // Add controls to form in the correct order. Same-Dock-style controls stack in
-            // the REVERSE of the order added here (last added ends up closest to the top
-            // edge) - confirmed the hard way in MainForm a few sessions back, so strengthPanel
-            // is added after lengthPanel but before passwordPanel to land visually between them.
-            Controls.Add(txtNotes); // Add notes field at the bottom
-            Controls.Add(actionPanel); // Add action panel for buttons
-            Controls.Add(repeatUrlPanel); // Add repeat password and URL panel
-            Controls.Add(lengthPanel); // Add the password length panel
-            Controls.Add(strengthPanel); // Add the password strength meter
-            Controls.Add(passwordPanel); // Add the password panel
-            Controls.Add(textBoxPanel); // Add the text box panel
+            // Add controls to the scrollable body in the correct order. Same-Dock-style
+            // controls stack in the REVERSE of the order added (last added ends up closest
+            // to the top edge) - confirmed the hard way in MainForm a few sessions back.
+            contentScroll.Controls.Add(notesGroup);
+            contentScroll.Controls.Add(urlGroup);
+            contentScroll.Controls.Add(repeatGroup);
+            contentScroll.Controls.Add(lengthPanel);
+            contentScroll.Controls.Add(strengthPanel);
+            contentScroll.Controls.Add(passwordGroup);
+            contentScroll.Controls.Add(usernameGroup);
+            contentScroll.Controls.Add(serviceGroup);
+
+            Controls.Add(contentScroll);
+            Controls.Add(actionPanel);
+            Controls.Add(lblFormTitle);
 
             Text = "Add Entry";
 
@@ -195,6 +253,7 @@ namespace PasswordManager
             if (existingAccount != null)
             {
                 Text = "Edit Entry";
+                lblFormTitle.Text = "Edit Entry";
                 txtService.Text = existingAccount.Service;
                 txtUsername.Text = existingAccount.Username;
                 txtUrl.Text = existingAccount.Url;
@@ -228,8 +287,7 @@ namespace PasswordManager
         private void BtnToggleSymbols_Click(object sender, EventArgs e)
         {
             includeSymbols = !includeSymbols; // Toggle symbols inclusion
-            btnToggleSymbols.Text = includeSymbols ? "⚙️" : "⚙️"; // Keep gear icon
-            btnToggleSymbols.BackColor = includeSymbols ? System.Drawing.Color.LightGreen : System.Drawing.Color.LightCoral;
+            btnToggleSymbols.BackColor = includeSymbols ? AppTheme.AccentSubtle : AppTheme.PanelBackground;
 
             RegeneratePassword(); // Regenerate password when toggling symbols
             ClearRepeatPassword(); // Clear repeat password textbox
@@ -238,8 +296,7 @@ namespace PasswordManager
         private void BtnToggleNumbers_Click(object sender, EventArgs e)
         {
             includeNumbers = !includeNumbers; // Toggle numbers inclusion
-            btnToggleNumbers.Text = includeNumbers ? "🔢" : "🔢"; // Keep numbers icon
-            btnToggleNumbers.BackColor = includeNumbers ? System.Drawing.Color.LightGreen : System.Drawing.Color.LightCoral;
+            btnToggleNumbers.BackColor = includeNumbers ? AppTheme.AccentSubtle : AppTheme.PanelBackground;
 
             RegeneratePassword(); // Regenerate password when toggling numbers
             ClearRepeatPassword(); // Clear repeat password textbox
@@ -312,11 +369,11 @@ namespace PasswordManager
             // Optionally, you could provide feedback if the passwords don't match
             if (txtPassword.Text != txtRepeatPassword.Text)
             {
-                txtRepeatPassword.BackColor = System.Drawing.Color.LightCoral; // Indicate mismatch
+                txtRepeatPassword.BackColor = System.Drawing.Color.IndianRed; // Same semantic red as the "Weak" strength tier
             }
             else
             {
-                txtRepeatPassword.BackColor = System.Drawing.Color.White; // Reset color
+                txtRepeatPassword.BackColor = AppTheme.Surface; // Reset colour
             }
         }
 
@@ -382,7 +439,7 @@ namespace PasswordManager
             txtPassword.Text = GenerateRandomPassword(length); // Generate a password of selected length
             txtRepeatPassword.Enabled = false; // Disable repeat password textbox when regenerating
             isGeneratedPassword = true; // Set flag to indicate generated password
-            txtRepeatPassword.BackColor = System.Drawing.Color.White; // Reset color
+            txtRepeatPassword.BackColor = AppTheme.Surface; // Reset colour
         }
 
         private string GenerateRandomPassword(int length)
@@ -422,6 +479,66 @@ namespace PasswordManager
             }
 
             RefreshUsernameSuggestions(); // Pick up any changes made in the manage dialog
+        }
+
+        /// Builds one "label above field" group for this form's stacked layout - the same
+        /// "caption then value" idea as MainForm's CreateDetailRow, just arranged vertically
+        /// instead of in one row, matching the reference apps' field style. fieldRow can be
+        /// a bare input (a single-field row) or a small Panel containing an input plus
+        /// inline buttons (e.g. the password row).
+        private static Panel CreateFieldGroup(string labelText, Control fieldRow, int fieldHeight)
+        {
+            const int labelHeight = 18;
+            const int groupBottomMargin = 10;
+
+            var wrapper = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = labelHeight + fieldHeight + groupBottomMargin,
+                Padding = new Padding(0, 0, 0, groupBottomMargin),
+                BackColor = AppTheme.Background
+            };
+
+            var label = new Label
+            {
+                Text = labelText,
+                Dock = DockStyle.Top,
+                Height = labelHeight,
+                Font = AppTheme.Caption,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft
+            };
+
+            fieldRow.Dock = DockStyle.Top;
+            fieldRow.Height = fieldHeight;
+
+            // Dock=Top siblings stack in reverse of add order (last added ends up closest to
+            // the top edge) - same quirk called out in MainForm - so the field goes in first.
+            wrapper.Controls.Add(fieldRow);
+            wrapper.Controls.Add(label);
+
+            return wrapper;
+        }
+
+        /// Builds one small flat icon button (Show/Generate/Manage/etc.), styled consistently
+        /// with MainForm's nav buttons - flat, borderless, accent-tinted hover.
+        private static Button CreateIconButton(string icon, int size)
+        {
+            var button = new Button
+            {
+                Text = icon,
+                Dock = DockStyle.Right,
+                Width = size,
+                Height = size,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = AppTheme.PanelBackground,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 11f),
+                Cursor = Cursors.Hand
+            };
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
+            button.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
+            return button;
         }
 
         private void RefreshUsernameSuggestions()

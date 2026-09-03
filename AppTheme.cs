@@ -32,6 +32,11 @@ namespace PasswordManager
         // Single accent colour, used sparingly (primary actions, selection, emphasis).
         public static readonly Color Accent = Color.FromArgb(0x6C, 0x5C, 0xE7);
 
+        // Darker accent shade for hover/pressed states on solid-accent ("primary") buttons,
+        // where AccentSubtle (meant for light tint-on-light-background hovers) would be too
+        // faint to read as a state change against the accent fill itself.
+        public static readonly Color AccentHover = Color.FromArgb(0x59, 0x4A, 0xC9);
+
         // Light tint of the accent colour - for hover/selected backgrounds where the
         // full accent colour would be too strong (e.g. nav item hover state).
         public static readonly Color AccentSubtle = Color.FromArgb(0xED, 0xEB, 0xFC);
