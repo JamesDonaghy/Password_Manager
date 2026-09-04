@@ -37,6 +37,12 @@ namespace PasswordManager
         // faint to read as a state change against the accent fill itself.
         public static readonly Color AccentHover = Color.FromArgb(0x59, 0x4A, 0xC9);
 
+        // Solid red used only for a dialog's destructive confirm action (e.g. "Delete" in
+        // ConfirmationDialog) - kept separate from Accent so a destructive "Yes" never looks
+        // like the same normal/constructive action as a "Save" button.
+        public static readonly Color Danger = Color.FromArgb(0xD9, 0x4A, 0x4A);
+        public static readonly Color DangerHover = Color.FromArgb(0xB8, 0x3A, 0x3A);
+
         // Light tint of the accent colour - for hover/selected backgrounds where the
         // full accent colour would be too strong (e.g. nav item hover state).
         public static readonly Color AccentSubtle = Color.FromArgb(0xED, 0xEB, 0xFC);

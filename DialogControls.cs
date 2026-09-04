@@ -109,5 +109,27 @@ namespace PasswordManager
             button.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
             return button;
         }
+
+        /// Solid red button for a dialog's destructive confirm action (e.g. "Delete" in
+        /// ConfirmationDialog) - deliberately distinct from CreatePrimaryButton's accent
+        /// fill, so a destructive action never reads as the same "normal" action as Save.
+        public static Button CreateDangerButton(string text, int width, int height)
+        {
+            var button = new Button
+            {
+                Text = text,
+                Width = width,
+                Height = height,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = AppTheme.Danger,
+                ForeColor = System.Drawing.Color.White,
+                Font = AppTheme.Base,
+                Cursor = Cursors.Hand
+            };
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = AppTheme.DangerHover;
+            button.FlatAppearance.MouseDownBackColor = AppTheme.DangerHover;
+            return button;
+        }
     }
 }
