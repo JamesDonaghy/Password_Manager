@@ -357,8 +357,11 @@ namespace PasswordManager
 
         private void TxtRepeatPassword_TextChanged(object sender, EventArgs e)
         {
-            // Optionally, you could provide feedback if the passwords don't match
-            if (txtPassword.Text != txtRepeatPassword.Text)
+            // Optionally, you could provide feedback if the passwords don't match.
+            // Only meaningful when the field is enabled (manually-typed password);
+            // for generated passwords the repeat field is disabled and cleared, and
+            // that clearing shouldn't be flagged as a "mismatch".
+            if (txtRepeatPassword.Enabled && txtPassword.Text != txtRepeatPassword.Text)
             {
                 txtRepeatPassword.BackColor = System.Drawing.Color.IndianRed; // Same semantic red as the "Weak" strength tier
             }
