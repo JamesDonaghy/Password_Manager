@@ -20,81 +20,114 @@ namespace PasswordManager
         {
             isFirstRunSetup = !CredentialStore.CredentialExists();
 
-            // Set form properties
             this.Text = isFirstRunSetup ? "Set Up Master Password" : "Login";
-            this.Size = new System.Drawing.Size(1000, 600); // Set size to 1000x600
-            this.FormBorderStyle = FormBorderStyle.FixedDialog; // Prevent resizing
-            this.MaximizeBox = false; // Disable maximize button
-            this.StartPosition = FormStartPosition.CenterScreen; // Center on screen
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.BackColor = AppTheme.Background;
+            this.Font = AppTheme.Base;
 
-            // Initialize components
-            txtPassword = new TextBox { PlaceholderText = "Master Password", PasswordChar = '*', TextAlign = HorizontalAlignment.Center, Width = 300 };
-            txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Master Password", PasswordChar = '*', TextAlign = HorizontalAlignment.Center, Width = 300, Visible = isFirstRunSetup };
-            btnLogin = new Button { Text = isFirstRunSetup ? "Create Master Password" : "Login", Width = 300 };
-            lblMessage = new Label
+            const int contentPadding = 24;
+            const int headerHeight = 44;
+            const int introHeight = 40;
+            const int messageHeight = 24;
+            const int buttonHeight = 36;
+
+            // Centered, branded heading rather than the other dialogs' left-aligned title -
+            // a deliberate exception, since this is the app's actual entry screen rather
+            // than a task dialog.
+            var lblFormTitle = new Label
             {
-                ForeColor = System.Drawing.Color.Red,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                AutoSize = true, // Enable AutoSize
-                MaximumSize = new System.Drawing.Size(300, 0) // Set maximum width to prevent cutting off
+                Text = isFirstRunSetup ? "🔒 Set Up Your Vault" : "🔒 Welcome Back",
+                Dock = DockStyle.Top,
+                Height = headerHeight,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
             };
 
-            // Create the password visibility toggle button
-            btnTogglePasswordVisibility = new Button { Text = "👁️", Width = 40, TextAlign = System.Drawing.ContentAlignment.MiddleCenter };
-            btnTogglePasswordVisibility.Click += BtnTogglePasswordVisibility_Click;
-
-            // Create a FlowLayoutPanel to arrange controls
-            FlowLayoutPanel flowPanel = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.TopDown,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                BackColor = System.Drawing.Color.Transparent,
-                Padding = new Padding(10)
-            };
-
-            // Create a panel for the password field and toggle button
-            FlowLayoutPanel passwordPanel = new FlowLayoutPanel
-            {
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                FlowDirection = FlowDirection.LeftToRight
-            };
-            passwordPanel.Controls.Add(txtPassword);
-            passwordPanel.Controls.Add(btnTogglePasswordVisibility);
-
-            // Add controls to the FlowLayoutPanel
-            flowPanel.Controls.Add(lblMessage);
-
+            Label introLabel = null;
             if (isFirstRunSetup)
             {
-                var introLabel = new Label
+                introLabel = new Label
                 {
                     Text = "No master password is set up on this device yet.\nChoose one to secure your vault.",
-                    TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                    AutoSize = true,
-                    MaximumSize = new System.Drawing.Size(300, 0)
+                    Dock = DockStyle.Top,
+                    Height = introHeight,
+                    Font = AppTheme.Base,
+                    ForeColor = AppTheme.TextSecondary,
+                    TextAlign = System.Drawing.ContentAlignment.TopCenter
                 };
-                flowPanel.Controls.Add(introLabel);
             }
 
-            flowPanel.Controls.Add(passwordPanel); // Add the password panel
-
-            if (isFirstRunSetup)
+            // Fixed-height (rather than AutoSize) so validation messages appearing/
+            // disappearing don't reflow the rest of the form - same reasoning as the
+            // other dialogs' lblMessage.
+            lblMessage = new Label
             {
-                flowPanel.Controls.Add(txtRepeatPassword);
+                Dock = DockStyle.Top,
+                Height = messageHeight,
+                ForeColor = System.Drawing.Color.IndianRed,
+                Font = AppTheme.Base,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+
+            txtPassword = new TextBox { PlaceholderText = "Master Password", PasswordChar = '*', BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
+            txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Master Password", PasswordChar = '*', BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base, Visible = isFirstRunSetup };
+
+            // A single-line TextBox always renders at its own font/border-derived height -
+            // PreferredHeight - and silently ignores any Height set on it (same issue fixed
+            // on ManageUsernamesForm's Add row). Sizing the eye-toggle button, and the field
+            // groups below, to that same value is what keeps everything vertically aligned,
+            // rather than asking the textbox to match a separate fixed button height.
+            int inputHeight = txtPassword.PreferredHeight;
+            int fieldGroupHeight = 18 + inputHeight + 10; // Matches DialogControls.CreateFieldGroup's own label/margin constants
+
+            btnTogglePasswordVisibility = DialogControls.CreateIconButton("👁️", inputHeight);
+            btnTogglePasswordVisibility.Click += BtnTogglePasswordVisibility_Click;
+
+            // Textbox fills the remaining width, eye-toggle button docked to its right -
+            // same pattern as AddEntryForm's password row.
+            var passwordRow = new Panel { BackColor = AppTheme.Background };
+            passwordRow.Controls.Add(txtPassword);
+            txtPassword.Dock = DockStyle.Fill;
+            passwordRow.Controls.Add(btnTogglePasswordVisibility);
+
+            var passwordGroup = DialogControls.CreateFieldGroup("Master Password", passwordRow, inputHeight);
+            var repeatGroup = isFirstRunSetup ? DialogControls.CreateFieldGroup("Repeat Master Password", txtRepeatPassword, inputHeight) : null;
+
+            // Full-width primary button rather than the other dialogs' right-aligned
+            // Save/Cancel row - there's no secondary/cancel action on a login screen, so
+            // one full-width call-to-action reads better here.
+            btnLogin = DialogControls.CreatePrimaryButton(isFirstRunSetup ? "Create Master Password" : "Login", 0, buttonHeight);
+            btnLogin.Dock = DockStyle.Top;
+
+            var contentPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(contentPadding, 8, contentPadding, 8), BackColor = AppTheme.Background };
+
+            // Dock=Top siblings stack in reverse of add order (last added ends up closest
+            // to the top edge) - same quirk called out throughout the other dialogs.
+            contentPanel.Controls.Add(btnLogin);
+            if (repeatGroup != null)
+            {
+                contentPanel.Controls.Add(repeatGroup);
+            }
+            contentPanel.Controls.Add(passwordGroup);
+            contentPanel.Controls.Add(lblMessage);
+            if (introLabel != null)
+            {
+                contentPanel.Controls.Add(introLabel);
             }
 
-            flowPanel.Controls.Add(btnLogin);
+            this.Controls.Add(contentPanel);
+            this.Controls.Add(lblFormTitle);
 
-            // Add the FlowLayoutPanel to the form
-            this.Controls.Add(flowPanel);
-
-            // Center the FlowLayoutPanel manually
-            flowPanel.Anchor = AnchorStyles.None;
-            flowPanel.Left = (this.ClientSize.Width - flowPanel.Width) / 2;
-            flowPanel.Top = (this.ClientSize.Height - flowPanel.Height) / 2;
+            // isFirstRunSetup is fixed for this form's whole lifetime (unlike AddEntryForm's
+            // length slider), so the exact content height can just be computed once here
+            // instead of needing a resizable/scrollable safety net.
+            int contentHeight = headerHeight + messageHeight + fieldGroupHeight + buttonHeight + 16 /* contentPanel top+bottom padding */
+                + (introLabel != null ? introHeight : 0)
+                + (repeatGroup != null ? fieldGroupHeight : 0);
+            this.ClientSize = new System.Drawing.Size(380, contentHeight);
 
             // Set event for button click - which handler runs depends on whether we're
             // setting up a master password for the first time or logging in with one
@@ -104,6 +137,12 @@ namespace PasswordManager
             // Handle key down event for text boxes
             txtPassword.KeyDown += TextBox_KeyDown;
             txtRepeatPassword.KeyDown += TextBox_KeyDown;
+
+            // So the person can start typing their master password immediately on launch,
+            // without needing to click into the field first. Setting ActiveControl (rather
+            // than calling txtPassword.Focus() here) is what actually works before the form
+            // has a window handle - WinForms applies it once the form is shown.
+            this.ActiveControl = txtPassword;
         }
 
         private void TextBox_KeyDown(object sender, KeyEventArgs e)
@@ -143,13 +182,10 @@ namespace PasswordManager
             {
                 lblMessage.Text = "";
 
-                // Create and show MainForm with the same size and position
-                MainForm mainForm = new MainForm(txtPassword.Text)
-                {
-                    Size = this.Size, // Set size to 1000x600
-                    StartPosition = FormStartPosition.Manual,
-                    Location = this.Location // Set location to the same as LoginForm
-                };
+                // MainForm sets its own size/position in its own constructor (1190x650,
+                // centered) - it doesn't need LoginForm's now-much-smaller dimensions
+                // copied onto it, which is what the old Size/Location overrides here did.
+                MainForm mainForm = new MainForm(txtPassword.Text);
 
                 mainForm.Show(); // Show the main form
                 this.Hide(); // Hide the login form
@@ -194,12 +230,8 @@ namespace PasswordManager
 
             // Proceed straight into the app now that the master password is set up,
             // rather than making the user immediately re-enter it to log in again.
-            MainForm mainForm = new MainForm(txtPassword.Text)
-            {
-                Size = this.Size,
-                StartPosition = FormStartPosition.Manual,
-                Location = this.Location
-            };
+            // MainForm sets its own size/position in its own constructor - see BtnLogin_Click.
+            MainForm mainForm = new MainForm(txtPassword.Text);
 
             mainForm.Show();
             this.Hide();
