@@ -28,6 +28,7 @@ namespace PasswordManager
         private Panel pnlStrengthBarContainer;
         private Panel pnlStrengthBarFill;
         private Label lblStrengthText;
+        private Panel contentScroll; // Scrollable body; needs its layout suspended too when toggling the length slider
 
         public string Service { get; private set; }
         public string Username { get; private set; }
@@ -55,6 +56,15 @@ namespace PasswordManager
 
             const int inputHeight = 30;
             const int iconSize = 30;
+
+            // The length slider row (TrackBar + label) is only added to the layout once,
+            // but its Visible starts false so it takes no space initially. When toggled on,
+            // the dialog needs to grow by roughly this much or the extra content pushes the
+            // total past the window's fixed height, which trips the AutoScroll safety net's
+            // scrollbar - and that scrollbar eats width from the row above it, squeezing the
+            // password field's icon buttons (reported in review). Growing the window itself
+            // instead avoids that, and avoids permanently reserving the space when hidden.
+            const int lengthRowHeight = 55;
 
             txtService = new TextBox { PlaceholderText = "Service Name", BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
             txtUsername = new ComboBox { Font = AppTheme.Base, DropDownStyle = ComboBoxStyle.DropDown };
@@ -96,14 +106,46 @@ namespace PasswordManager
             btnToggleLengthSlider = CreateIconButton("🔧", iconSize);
             btnToggleLengthSlider.Click += (sender, e) =>
             {
-                sliderPasswordLength.Visible = !sliderPasswordLength.Visible;
+                bool willShow = !sliderPasswordLength.Visible;
+
+                // SuspendLayout/ResumeLayout batches the resize and the visibility change
+                // into a single layout pass, but that alone didn't stop the flicker
+                // (reported in review): AutoScroll's scrollbar decision is made as PART of
+                // that batched layout pass, evaluated against whatever the content height
+                // happens to be at that instant - so it can still momentarily decide a
+                // scrollbar is needed before the Form has actually finished growing.
+                //
+                // Turning AutoScroll off for the duration removes the scrollbar calculation
+                // entirely, so there's nothing to flash. It's switched back on only once the
+                // Form is already at its final size, so contentScroll's one-and-only
+                // evaluation happens against the correct height and (in the normal case)
+                // never needs a scrollbar at all.
+                this.SuspendLayout();
+                contentScroll.SuspendLayout();
+                contentScroll.AutoScroll = false;
+
+                if (willShow)
+                {
+                    this.Height += lengthRowHeight;
+                }
+
+                sliderPasswordLength.Visible = willShow;
 
                 // Only show current length label when slider is visible
-                lblCurrentLength.Visible = sliderPasswordLength.Visible;
-                if (sliderPasswordLength.Visible)
+                lblCurrentLength.Visible = willShow;
+                if (willShow)
                 {
                     lblCurrentLength.Text = sliderPasswordLength.Value.ToString(); // Show the current length when the slider is displayed
                 }
+
+                if (!willShow)
+                {
+                    this.Height -= lengthRowHeight;
+                }
+
+                contentScroll.ResumeLayout(true);
+                this.ResumeLayout(true);
+                contentScroll.AutoScroll = true; // Re-enable as the safety net, now evaluated against the final size
             };
 
             // Create buttons for password actions with matching sizes
@@ -205,7 +247,7 @@ namespace PasswordManager
             // Scrollable body so a longer-than-expected layout (different DPI/font metrics)
             // grows a scrollbar instead of clipping a field - the rest of the form isn't
             // resizable (FixedDialog), so this is the one safety net for that.
-            var contentScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(20, 2, 20, 2), BackColor = AppTheme.Background };
+            contentScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(20, 2, 20, 2), BackColor = AppTheme.Background };
 
             var actionPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Padding = new Padding(20, 8, 20, 12), BackColor = AppTheme.Background };
             // Both buttons need matching top/bottom margin or they render misaligned

@@ -32,24 +32,17 @@ namespace PasswordManager
             this.MinimizeBox = false;
             this.ShowInTaskbar = false;
             this.StartPosition = FormStartPosition.CenterParent;
+            this.BackColor = AppTheme.Background;
+            this.Font = AppTheme.Base;
+            this.Size = new Size(380, 380);
 
-            var font = SystemFonts.MessageBoxFont;
             var columnList = columns.ToList();
             columnNames = columnList.Select(c => c.Name).ToList();
 
-            var lblInstructions = new Label
-            {
-                Text = "Choose the columns to show in the main window:",
-                Font = font,
-                AutoSize = true,
-                Location = new Point(12, 12)
-            };
-
             checkedListBox = new CheckedListBox
             {
-                Font = font,
-                Location = new Point(12, 36),
-                Size = new Size(260, 130),
+                Font = AppTheme.Base,
+                BorderStyle = BorderStyle.FixedSingle,
                 CheckOnClick = true,
                 IntegralHeight = false
             };
@@ -59,37 +52,40 @@ namespace PasswordManager
                 checkedListBox.Items.Add(column.Header, column.Visible);
             }
 
-            int buttonsTop = checkedListBox.Bottom + 15;
-
-            var btnOk = new Button
-            {
-                Text = "OK",
-                Width = 90,
-                Height = 28,
-                Font = font,
-                Location = new Point(102, buttonsTop)
-            };
+            var btnOk = DialogControls.CreatePrimaryButton("OK", 90, 32);
             btnOk.Click += BtnOk_Click;
 
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                Width = 90,
-                Height = 28,
-                Font = font,
-                Location = new Point(197, buttonsTop)
-            };
+            var btnCancel = DialogControls.CreateSecondaryButton("Cancel", 90, 32);
             btnCancel.Click += (s, e) => { this.DialogResult = DialogResult.Cancel; this.Close(); };
 
-            this.Controls.Add(lblInstructions);
-            this.Controls.Add(checkedListBox);
-            this.Controls.Add(btnOk);
-            this.Controls.Add(btnCancel);
+            var lblFormTitle = new Label
+            {
+                Text = "Configure Columns",
+                Dock = DockStyle.Top,
+                Height = 36,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = ContentAlignment.BottomLeft,
+                Padding = new Padding(20, 0, 0, 6)
+            };
+
+            var listGroup = DialogControls.CreateFieldGroup("Choose the columns to show", checkedListBox, 180);
+
+            var contentPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20, 2, 20, 2), BackColor = AppTheme.Background };
+            contentPanel.Controls.Add(listGroup);
+
+            var actionPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Padding = new Padding(20, 8, 20, 12), BackColor = AppTheme.Background };
+            btnCancel.Margin = new Padding(0, 3, 0, 3);
+            btnOk.Margin = new Padding(10, 3, 0, 3);
+            actionPanel.Controls.Add(btnCancel);
+            actionPanel.Controls.Add(btnOk);
+
+            this.Controls.Add(contentPanel);
+            this.Controls.Add(actionPanel);
+            this.Controls.Add(lblFormTitle);
 
             this.AcceptButton = btnOk;
             this.CancelButton = btnCancel;
-
-            this.ClientSize = new Size(284, buttonsTop + 28 + 12);
         }
 
         private void BtnOk_Click(object sender, System.EventArgs e)
