@@ -131,5 +131,29 @@ namespace PasswordManager
             button.FlatAppearance.MouseDownBackColor = AppTheme.DangerHover;
             return button;
         }
+
+        /// Small flat, borderless button for an inline text action next to a value (e.g.
+        /// "Copy"/"Show" beside a details-panel field) - too minor an action to warrant a
+        /// filled primary/secondary button, but still themed and hover-tinted rather than
+        /// a plain default Button. Accent-coloured text signals it's actionable, similar to
+        /// a text link.
+        public static Button CreateInlineActionButton(string text, int width, int height)
+        {
+            var button = new Button
+            {
+                Text = text,
+                Width = width,
+                Height = height,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = AppTheme.PanelBackground,
+                ForeColor = AppTheme.Accent,
+                Font = AppTheme.Base,
+                Cursor = Cursors.Hand
+            };
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
+            button.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
+            return button;
+        }
     }
 }

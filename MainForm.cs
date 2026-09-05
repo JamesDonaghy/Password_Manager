@@ -221,9 +221,10 @@ namespace PasswordManager
                 AutoEllipsis = true, // Long values (e.g. full emails) get "..." instead of forcing the row to wrap
                 Width = 150,
                 Height = 20,
+                ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
-            var btnDetailsCopyUsername = new Button { Text = "Copy", Width = 60, Height = 24 };
+            var btnDetailsCopyUsername = DialogControls.CreateInlineActionButton("Copy", 60, 24);
             btnDetailsCopyUsername.Click += (sender, e) =>
             {
                 if (dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount)
@@ -238,9 +239,10 @@ namespace PasswordManager
                 AutoEllipsis = true,
                 Width = 100,
                 Height = 20,
+                ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
-            btnDetailsTogglePassword = new Button { Text = "Show", Width = 60, Height = 24 };
+            btnDetailsTogglePassword = DialogControls.CreateInlineActionButton("Show", 60, 24);
             btnDetailsTogglePassword.Click += (sender, e) =>
             {
                 if (!(dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount))
@@ -252,7 +254,7 @@ namespace PasswordManager
                 dgvAccounts.InvalidateRow(dgvAccounts.CurrentRow.Index); // Keep the grid's own masking in sync too
                 RefreshDetailsPanel();
             };
-            var btnDetailsCopyPassword = new Button { Text = "Copy", Width = 60, Height = 24 };
+            var btnDetailsCopyPassword = DialogControls.CreateInlineActionButton("Copy", 60, 24);
             btnDetailsCopyPassword.Click += (sender, e) =>
             {
                 if (dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount)
@@ -261,7 +263,7 @@ namespace PasswordManager
                 }
             };
 
-            lblDetailsUrl = new Label { AutoSize = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            lblDetailsUrl = new Label { AutoSize = true, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
 
             txtDetailsNotes = new TextBox
             {
@@ -270,11 +272,13 @@ namespace PasswordManager
                 ScrollBars = ScrollBars.Vertical,
                 Height = 60,
                 Width = 160,
-                BorderStyle = BorderStyle.FixedSingle
+                BorderStyle = BorderStyle.FixedSingle,
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Surface
             };
 
-            lblDetailsCreated = new Label { AutoSize = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
-            lblDetailsModified = new Label { AutoSize = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            lblDetailsCreated = new Label { AutoSize = true, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            lblDetailsModified = new Label { AutoSize = true, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
 
             var detailsLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8 };
             for (int i = 0; i < 7; i++)
@@ -294,9 +298,9 @@ namespace PasswordManager
             // Edit and Delete reuse the exact same handlers as the context menu's Edit
             // Entry/Delete Entry items - both already operate on whatever's currently
             // selected in the grid, which is exactly what this panel is showing.
-            var btnDetailsEdit = new Button { Text = "Edit", Width = 80, Height = 32 };
+            var btnDetailsEdit = DialogControls.CreatePrimaryButton("Edit", 80, 32);
             btnDetailsEdit.Click += EditEntry_Click;
-            var btnDetailsDelete = new Button { Text = "Delete", Width = 80, Height = 32 };
+            var btnDetailsDelete = DialogControls.CreateDangerButton("Delete", 80, 32);
             btnDetailsDelete.Click += DeleteEntry_Click;
             var detailsActionsPanel = new FlowLayoutPanel
             {
@@ -505,8 +509,15 @@ namespace PasswordManager
             };
 
             valueControl.Margin = new Padding(0, 3, 8, 0);
-            if (valueControl is Label && !(valueControl is TextBox))
+            if (valueControl is Label || valueControl is TextBox)
             {
+                // Stretches to fill the column's available width instead of sitting at its
+                // initial fixed Width - this is what makes the Notes box (the only TextBox
+                // passed here) fill the panel instead of leaving blank space to its right.
+                // (The old condition here excluded TextBox, but "is Label && not TextBox" was
+                // always equivalent to just "is Label" - TextBox can never satisfy "is Label"
+                // in the first place - so the exclusion never did anything except leave
+                // Notes un-stretched.)
                 valueControl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             }
 
