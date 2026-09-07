@@ -73,8 +73,13 @@ namespace PasswordManager
 
         private void InitializeComponent()
         {
+            // Shared themed renderer for both the menu bar and the row context menu below -
+            // see AppMenuColorTable for what it actually changes (just colours, not menu
+            // behaviour).
+            var menuRenderer = new ToolStripProfessionalRenderer(new AppMenuColorTable());
+
             this.dgvAccounts = new DataGridView();
-            this.contextMenu = new ContextMenuStrip();
+            this.contextMenu = new ContextMenuStrip { Renderer = menuRenderer, Font = AppTheme.Base, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary };
             this.contextMenu.Items.Add("Add Entry", null, AddEntry_Click);
             this.editEntryMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Edit Entry", null, EditEntry_Click);
             this.deleteEntryMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Delete Entry", null, DeleteEntry_Click);
@@ -85,7 +90,7 @@ namespace PasswordManager
 
             // App-level actions that don't depend on a selected row live in a proper menu
             // bar, not the row context menu.
-            this.menuStrip = new MenuStrip { Dock = DockStyle.Top };
+            this.menuStrip = new MenuStrip { Dock = DockStyle.Top, Renderer = menuRenderer, Font = AppTheme.Base, BackColor = AppTheme.PanelBackground, ForeColor = AppTheme.TextPrimary };
             var settingsMenu = new ToolStripMenuItem("Settings");
             settingsMenu.DropDownItems.Add("Lock", null, Lock_Click);
             settingsMenu.DropDownItems.Add("Change Master Password", null, ChangeMasterPassword_Click);
