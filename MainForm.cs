@@ -39,6 +39,19 @@ namespace PasswordManager
         // Tracks which accounts currently have their password shown in the grid.
         private readonly RevealedPasswordTracker passwordRevealTracker = new RevealedPasswordTracker();
 
+        // Auto-lock: returns to the login screen after 5 minutes with no mouse/keyboard
+        // activity anywhere in the app, so a vault left open on an unattended workstation
+        // doesn't stay exposed indefinitely. See ActivityMessageFilter for how activity is
+        // detected, and Lock() for what actually happens when it's time to lock.
+        private static readonly TimeSpan AutoLockTimeout = TimeSpan.FromMinutes(5);
+        private readonly System.Windows.Forms.Timer autoLockTimer = new System.Windows.Forms.Timer { Interval = 15000 }; // Checked every 15s; the 5-minute figure above is what actually matters. Fully qualified: System.Threading also has a Timer class, and this project's ImplicitUsings brings that namespace in globally, making the bare name ambiguous.
+        private readonly ActivityMessageFilter activityFilter = new ActivityMessageFilter();
+        private DateTime lastActivityUtc = DateTime.UtcNow;
+
+        // Set just before deliberately closing this form to lock, so MainForm_FormClosing
+        // knows not to treat it as a real application exit (see both for why).
+        private bool isLocking;
+
         // Needed to derive the vault's encryption key (see VaultStorage). Kept only in
         // memory for the lifetime of this form - never written to disk anywhere. Not
         // readonly: ChangeMasterPassword_Click updates it after a successful change so
@@ -74,6 +87,7 @@ namespace PasswordManager
             // bar, not the row context menu.
             this.menuStrip = new MenuStrip { Dock = DockStyle.Top };
             var settingsMenu = new ToolStripMenuItem("Settings");
+            settingsMenu.DropDownItems.Add("Lock", null, Lock_Click);
             settingsMenu.DropDownItems.Add("Change Master Password", null, ChangeMasterPassword_Click);
             settingsMenu.DropDownItems.Add("Backup Vault...", null, BackupVault_Click);
             settingsMenu.DropDownItems.Add("Restore Vault...", null, RestoreVault_Click);
@@ -136,6 +150,13 @@ namespace PasswordManager
             // the auto-clear timer never gets the chance to fire - clear it here instead.
             this.FormClosing += MainForm_FormClosing;
 
+            // Wire up the auto-lock timer and global activity detector (see the field
+            // declarations above and Lock()/MainForm_FormClosing below for the full picture).
+            this.activityFilter.ActivityDetected += () => lastActivityUtc = DateTime.UtcNow;
+            Application.AddMessageFilter(this.activityFilter);
+            this.autoLockTimer.Tick += AutoLockTimer_Tick;
+            this.autoLockTimer.Start();
+
             // --- Three-column layout ---
             // Using a TableLayoutPanel with explicit column positions rather than more
             // stacked Dock-style siblings, since we've already been burned once by
@@ -166,13 +187,17 @@ namespace PasswordManager
             var btnSettings = CreateNavButton("Change Master Password", ChangeMasterPassword_Click); // Same handler as the existing Settings menu item
             var btnRestoreVault = CreateNavButton("Restore Vault", RestoreVault_Click); // Same handler as the existing menu item
             var btnBackupVault = CreateNavButton("Backup Vault", BackupVault_Click); // Same handler as the existing menu item
+            var btnLock = CreateNavButton("🔒 Lock", Lock_Click); // Same handler as the existing menu item
 
             // Stacked Dock=Top siblings render in reverse of the order added (last added
             // ends up closest to the top edge) - see the earlier menu bar/search box fix
-            // for why this is called out explicitly rather than assumed.
+            // for why this is called out explicitly rather than assumed. Lock is added last
+            // so it sits at the very top, above the rest - it's the one nav action someone
+            // needs to reach for quickly.
             this.leftNavPanel.Controls.Add(btnSettings);
             this.leftNavPanel.Controls.Add(btnRestoreVault);
             this.leftNavPanel.Controls.Add(btnBackupVault);
+            this.leftNavPanel.Controls.Add(btnLock);
             this.leftNavPanel.Controls.Add(leftNavDivider);
 
             // Middle column: search box + grid. Layout/columns unchanged from the original
@@ -728,11 +753,56 @@ namespace PasswordManager
             clipboardGuard.CopyAndAutoClear(selectedAccount.Password);
         }
 
+        private void AutoLockTimer_Tick(object sender, EventArgs e)
+        {
+            // While a modal dialog owned by MainForm (Add/Edit Entry, a confirmation, etc.)
+            // is focused, defer locking rather than yanking it away mid-use - just check
+            // again next tick. ShowDialog() isn't called consistently with an owner
+            // throughout this file, so checking Form.ActiveForm here is what reliably
+            // detects "some other window is currently active" regardless of that.
+            if (Form.ActiveForm != this)
+            {
+                return;
+            }
+
+            if (DateTime.UtcNow - lastActivityUtc >= AutoLockTimeout)
+            {
+                Lock();
+            }
+        }
+
+        private void Lock_Click(object sender, EventArgs e)
+        {
+            Lock();
+        }
+
+        /// Returns to the login screen, requiring the master password to be re-entered,
+        /// without ending the application process - used by both the Lock button/menu item
+        /// and the auto-lock timer above.
+        private void Lock()
+        {
+            isLocking = true;
+
+            var loginForm = new LoginForm();
+            loginForm.Show();
+            this.Close(); // Triggers MainForm_FormClosing, which checks isLocking rather than exiting the app
+        }
+
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             // If a copied password is still sitting on the clipboard, the auto-clear timer
             // never gets the chance to fire on its own - clear it here instead.
             clipboardGuard.ClearIfStillCopied();
+
+            autoLockTimer.Stop();
+            Application.RemoveMessageFilter(activityFilter);
+
+            if (isLocking)
+            {
+                // Lock() already opened a fresh LoginForm - don't fall through to
+                // Application.Exit() below.
+                return;
+            }
 
             // LoginForm called Hide() rather than Close() when login succeeded, so it's
             // still technically open - and Application.Run (in Program.cs) is watching
