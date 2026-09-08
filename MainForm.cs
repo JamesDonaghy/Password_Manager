@@ -10,6 +10,7 @@ namespace PasswordManager
     {
         private DataGridView dgvAccounts;
         private TextBox txtSearch;
+        private Label lblEntryCount;
         private Panel leftNavPanel;
         private Panel rightDetailsPanel;
         private Label rightDetailsPlaceholder;
@@ -98,6 +99,41 @@ namespace PasswordManager
             settingsMenu.DropDownItems.Add("Restore Vault...", null, RestoreVault_Click);
             this.menuStrip.Items.Add(settingsMenu);
             this.MainMenuStrip = this.menuStrip;
+
+            // Vault header: heading, live entry count, and a real "+ Add Entry" button -
+            // previously the only way to add an entry was the row context menu, which
+            // isn't discoverable on an empty or unfamiliar vault.
+            var btnAddEntry = DialogControls.CreatePrimaryButton("+ Add Entry", 130, 36);
+            btnAddEntry.Dock = DockStyle.Right;
+            btnAddEntry.Click += AddEntry_Click;
+
+            var lblVaultHeading = new Label
+            {
+                Text = "Your Vault",
+                Dock = DockStyle.Fill,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+
+            var titleRow = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = AppTheme.Background };
+            titleRow.Controls.Add(lblVaultHeading);
+            titleRow.Controls.Add(btnAddEntry);
+
+            // Text set by UpdateEntryCountLabel() below, called once on initial load and
+            // again on every Accounts_ListChanged - always reflects the vault's total count,
+            // not the current search's filtered count, matching "Your Vault" being the whole
+            // vault rather than a search-results view.
+            this.lblEntryCount = new Label
+            {
+                Dock = DockStyle.Top,
+                Height = 24,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.TopLeft
+            };
+
+            var headerBottomSpacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.Background };
 
             this.txtSearch = new TextBox
             {
@@ -213,6 +249,9 @@ namespace PasswordManager
             middlePanel.Controls.Add(this.dgvAccounts);
             middlePanel.Controls.Add(searchSpacer);
             middlePanel.Controls.Add(searchBorder);
+            middlePanel.Controls.Add(headerBottomSpacer);
+            middlePanel.Controls.Add(this.lblEntryCount);
+            middlePanel.Controls.Add(titleRow);
 
             // Right column: entry details. Content is built once here and just updated
             // in-place on selection change, rather than rebuilt each time.
@@ -470,6 +509,7 @@ namespace PasswordManager
             dgvAccounts.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
 
             gridPresenter.Refresh(accounts, txtSearch.Text); // Starts unfiltered since txtSearch is empty
+            UpdateEntryCountLabel();
 
             // Entries are only ever added/edited through AddEntryForm (via the right-click
             // menu), never by typing directly into the grid. Leaving AllowUserToAddRows on
@@ -620,6 +660,15 @@ namespace PasswordManager
             // AccountGridPresenter), so it needs an explicit refresh to pick up the change
             // that just happened.
             gridPresenter.Refresh(accounts, txtSearch.Text);
+            UpdateEntryCountLabel();
+        }
+
+        /// Keeps the "N entries" text under the "Your Vault" heading in sync with the
+        /// vault's total size (not the current search's filtered count - see where this is
+        /// built for why).
+        private void UpdateEntryCountLabel()
+        {
+            lblEntryCount.Text = accounts.Count == 1 ? "1 entry" : $"{accounts.Count} entries";
         }
 
         private void TxtSearch_TextChanged(object sender, EventArgs e)
@@ -633,7 +682,7 @@ namespace PasswordManager
             {
                 // Get the current cursor position
                 var mousePos = Control.MousePosition;
-                addEntryForm.StartPosition = FormStartPosition.Manual; // Set to manual
+                addEntryForm.StartPosition = FormStartPosition.CenterParent;
                 addEntryForm.Location = new System.Drawing.Point(mousePos.X, mousePos.Y); // Position next to the cursor
 
                 // Show the form as a dialog
