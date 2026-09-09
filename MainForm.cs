@@ -182,10 +182,11 @@ namespace PasswordManager
             // one the user just right-clicked.
             this.dgvAccounts.CellMouseDown += DgvAccounts_CellMouseDown;
 
-            // Owns filtering, sorting, column setup, password masking, date formatting,
-            // and stale-entry highlighting - see AccountGridPresenter for why reveal-state
-            // is passed in as a predicate rather than owned by it.
-            this.gridPresenter = new AccountGridPresenter(this.dgvAccounts, passwordRevealTracker.IsRevealed);
+            // Owns filtering and the card-style row painting (icon badge, service name,
+            // username) - see AccountGridPresenter. Password is no longer shown in the list
+            // at all, so it no longer needs passwordRevealTracker; that's only relevant to
+            // the details panel now (see RefreshDetailsPanel/TogglePasswordVisibility_Click).
+            this.gridPresenter = new AccountGridPresenter(this.dgvAccounts);
 
             // If a copied password is still sitting on the clipboard when the app closes,
             // the auto-clear timer never gets the chance to fire - clear it here instead.
@@ -481,8 +482,8 @@ namespace PasswordManager
             // rebinding DataSource on every Refresh(), so these only need setting once here.
             dgvAccounts.BackgroundColor = AppTheme.Background;
             dgvAccounts.BorderStyle = BorderStyle.None;
-            dgvAccounts.GridColor = AppTheme.Border;
-            dgvAccounts.RowTemplate.Height = 32; // A bit more breathing room than the ~22px default
+            dgvAccounts.CellBorderStyle = DataGridViewCellBorderStyle.None; // Rows draw their own divider instead (see AccountGridPresenter)
+            dgvAccounts.RowTemplate.Height = 68; // Tall enough for the icon badge plus two stacked text lines
 
             // Full-row highlighting instead of the default single-cell selection reads as far
             // more "list of entries, pick one" - closer to the reference apps - and the row
@@ -494,19 +495,7 @@ namespace PasswordManager
             dgvAccounts.DefaultCellStyle.SelectionBackColor = AppTheme.AccentSubtle;
             dgvAccounts.DefaultCellStyle.SelectionForeColor = AppTheme.TextPrimary;
             dgvAccounts.DefaultCellStyle.ForeColor = AppTheme.TextPrimary;
-
-            // EnableHeadersVisualStyles must be off for ColumnHeadersDefaultCellStyle to take
-            // effect at all - otherwise Windows' own visual-styles renderer draws the header
-            // and ignores these colours entirely.
-            dgvAccounts.EnableHeadersVisualStyles = false;
-            dgvAccounts.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvAccounts.ColumnHeadersHeight = 36;
-            dgvAccounts.ColumnHeadersDefaultCellStyle.BackColor = AppTheme.PanelBackground;
-            dgvAccounts.ColumnHeadersDefaultCellStyle.ForeColor = AppTheme.TextSecondary;
-            dgvAccounts.ColumnHeadersDefaultCellStyle.Font = AppTheme.Caption; // Reuses the same caption style as the details panel's field labels
-            dgvAccounts.ColumnHeadersDefaultCellStyle.SelectionBackColor = AppTheme.PanelBackground; // Headers aren't selectable rows - keep them looking static, not "selected"
-            dgvAccounts.ColumnHeadersDefaultCellStyle.SelectionForeColor = AppTheme.TextSecondary;
-            dgvAccounts.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dgvAccounts.DefaultCellStyle.BackColor = AppTheme.Surface; // Explicit rather than relying on WinForms' own default (white) happening to already match Surface
 
             gridPresenter.Refresh(accounts, txtSearch.Text); // Starts unfiltered since txtSearch is empty
             UpdateEntryCountLabel();
@@ -680,13 +669,10 @@ namespace PasswordManager
         {
             using (var addEntryForm = new AddEntryForm())
             {
-                // Get the current cursor position
-                var mousePos = Control.MousePosition;
                 addEntryForm.StartPosition = FormStartPosition.CenterParent;
-                addEntryForm.Location = new System.Drawing.Point(mousePos.X, mousePos.Y); // Position next to the cursor
 
                 // Show the form as a dialog
-                if (addEntryForm.ShowDialog() == DialogResult.OK)
+                if (addEntryForm.ShowDialog(this) == DialogResult.OK)
                 {
                     var account = new Account
                     {

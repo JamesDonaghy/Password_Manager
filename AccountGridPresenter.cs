@@ -1,67 +1,78 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
 
 namespace PasswordManager
 {
     /// <summary>
-    /// Owns how the account grid renders what it's given: filtering, sorting, column
-    /// setup, password masking, date formatting, and stale-entry highlighting. Doesn't
-    /// own the account list itself, or which passwords are currently revealed - those
-    /// are supplied by the caller (MainForm) each time, since selection and reveal-state
-    /// are interaction/menu concerns, not grid rendering.
+    /// Owns how the account list renders what it's given: filtering and a custom-painted
+    /// "card" row (service icon badge, service name, username underneath, favourite/chevron
+    /// placeholders) instead of the old plain data table. Doesn't own the account list
+    /// itself - that's supplied by the caller (MainForm) each time via Refresh().
+    ///
+    /// Column-header sorting and per-column show/hide (Configure Columns) were removed
+    /// along with the table layout they belonged to - there's only one merged display
+    /// column now, so neither had anywhere left to attach. See ColumnConfigForm's removal
+    /// in the same commit as this file's rewrite.
     /// </summary>
     public class AccountGridPresenter
     {
         private readonly DataGridView grid;
-        private readonly Func<Account, bool> isPasswordRevealed;
-
-        // Which column is currently sorted, and in which direction. Null means unsorted
-        // (insertion order). Cached alongside the last-seen accounts/search text so a
-        // column header click can re-run the same filter+sort without MainForm needing
-        // to supply them again.
-        private string sortColumn;
-        private bool sortAscending = true;
         private IEnumerable<Account> lastAccounts = Enumerable.Empty<Account>();
         private string lastSearchText = string.Empty;
 
-        // Columns the user has chosen to hide via the header's "Configure Columns..." menu,
-        // by underlying column name (i.e. the Account property name). Persists here across
-        // refreshes since AutoGenerateColumns rebuilds the column objects from scratch every
-        // time DataSource is reassigned - the grid itself has nowhere lasting to remember it.
-        // Loaded from ColumnVisibilityStore up front so the choice also survives an app
-        // restart, and saved back to it every time it changes (see ConfigureColumns_Click).
-        private readonly HashSet<string> hiddenColumns = new HashSet<string>(ColumnVisibilityStore.LoadHiddenColumns());
+        // Which row the mouse is currently over, for the hover highlight - DataGridView
+        // has no built-in concept of row hover, so this is tracked manually and the
+        // affected rows are invalidated (repainted) on change.
+        private int hoveredRowIndex = -1;
 
-        // Shown when right-clicking a column header, KeePass-style. Assigned directly to
-        // each column's HeaderCell.ContextMenuStrip (rather than left as the grid's general
-        // ContextMenuStrip) so it replaces the row context menu specifically over the header
-        // row, without interfering with right-clicking an actual row.
-        private readonly ContextMenuStrip headerContextMenu;
+        // Palette for the service-initial badge (see Grid_CellPainting) - a real per-
+        // service icon system (fetching/caching actual brand icons) is a bigger feature for
+        // later; this is a lightweight stand-in in the same spirit as a contact app's
+        // coloured-initial avatars.
+        private static readonly Color[] ServiceBadgeColors =
+        {
+            AppTheme.Accent,
+            Color.FromArgb(0xE0, 0x6C, 0x3D), // Orange
+            Color.FromArgb(0x2F, 0x9E, 0x6B), // Green
+            Color.FromArgb(0xD1, 0x4B, 0x7A), // Rose
+            Color.FromArgb(0x3B, 0x82, 0xC4), // Blue
+            Color.FromArgb(0x8A, 0x5C, 0xD6), // Violet
+            Color.FromArgb(0xC4, 0x8A, 0x2F), // Amber
+            Color.FromArgb(0x4F, 0xA8, 0xA3), // Teal
+        };
 
-        public AccountGridPresenter(DataGridView grid, Func<Account, bool> isPasswordRevealed)
+        public AccountGridPresenter(DataGridView grid)
         {
             this.grid = grid;
-            this.isPasswordRevealed = isPasswordRevealed;
 
-            this.headerContextMenu = new ContextMenuStrip();
-            this.headerContextMenu.Items.Add("Configure Columns...", null, ConfigureColumns_Click);
+            // A single column spanning the whole grid, entirely custom-painted (see
+            // Grid_CellPainting) rather than showing its bound value as text - there's no
+            // per-field column structure anymore now that the list is a merged
+            // service+username card rather than a table. AutoGenerateColumns off means
+            // this column is created once here and persists across DataSource reassignments
+            // in Refresh(), rather than being torn down and rebuilt every time.
+            grid.AutoGenerateColumns = false;
+            grid.ColumnHeadersVisible = false;
+            var entryColumn = new DataGridViewTextBoxColumn
+            {
+                Name = nameof(Account.Service),
+                DataPropertyName = nameof(Account.Service),
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+            };
+            grid.Columns.Add(entryColumn);
 
-            // Masks the Password column's displayed text unless the row has been revealed,
-            // and formats the Created/Modified date columns.
-            grid.CellFormatting += Grid_CellFormatting;
-
-            // Click a column header to sort by it. BindingList<T> (what the grid is bound
-            // to) doesn't support sorting on its own, so this is handled manually.
-            grid.ColumnHeaderMouseClick += Grid_ColumnHeaderMouseClick;
+            grid.CellPainting += Grid_CellPainting;
+            grid.CellMouseMove += Grid_CellMouseMove;
+            grid.MouseLeave += Grid_MouseLeave;
         }
 
-        /// Rebuilds the grid's contents from the given accounts and search text, applying
-        /// whatever sort is currently active. Call this whenever the account list changes
-        /// or the search text changes - it re-caches both so a later column header click
-        /// can refresh again without needing them re-supplied.
+        /// Rebuilds the list's contents from the given accounts and search text. Call this
+        /// whenever the account list changes or the search text changes.
         public void Refresh(IEnumerable<Account> accounts, string searchText)
         {
             lastAccounts = accounts ?? Enumerable.Empty<Account>();
@@ -84,169 +95,171 @@ namespace PasswordManager
                     Contains(a.Url, filterText) ||
                     Contains(a.Notes, filterText));
 
-            filtered = ApplySort(filtered);
-
             grid.DataSource = new BindingList<Account>(filtered.ToList());
+            hoveredRowIndex = -1; // Row indices are meaningless after a full rebind
 
-            // Columns are regenerated whenever DataSource is reassigned (AutoGenerateColumns
-            // is on), so all of these need reapplying every time, not just once at startup.
-            foreach (DataGridViewColumn column in grid.Columns)
-            {
-                // Programmatic means DataGridView won't attempt its own automatic sorting -
-                // which BindingList<T> doesn't support anyway - and instead leaves header
-                // clicks entirely to Grid_ColumnHeaderMouseClick.
-                column.SortMode = DataGridViewColumnSortMode.Programmatic;
-                column.HeaderCell.SortGlyphDirection = column.Name == sortColumn
-                    ? (sortAscending ? SortOrder.Ascending : SortOrder.Descending)
-                    : SortOrder.None;
-
-                // Re-apply whatever show/hide choice the user last made in Configure Columns.
-                column.Visible = !hiddenColumns.Contains(column.Name);
-
-                // Right-click a header for the Configure Columns menu, same as left-click is
-                // sorting - assigned per-column since HeaderCell is recreated along with it.
-                column.HeaderCell.ContextMenuStrip = headerContextMenu;
-            }
-
-            // Rows also get rebuilt every time DataSource changes, so re-highlight stale
-            // entries here too. Selecting a row still shows the normal selection highlight
-            // on top of this - that takes precedence, no conflict.
+            // Rows are rebuilt every time DataSource changes, so re-highlight stale entries
+            // here too. Grid_CellPainting reads this back as the row's base background
+            // colour - selecting/hovering a row still takes precedence on top of it.
             foreach (DataGridViewRow row in grid.Rows)
             {
                 if (row.DataBoundItem is Account account && StaleEntryPolicy.IsStale(account))
                 {
                     row.DefaultCellStyle.BackColor = StaleEntryPolicy.HighlightColor;
-
-                    foreach (DataGridViewCell cell in row.Cells)
-                    {
-                        cell.ToolTipText = StaleEntryPolicy.ExplanationText;
-                    }
+                    row.Cells[0].ToolTipText = StaleEntryPolicy.ExplanationText;
                 }
             }
         }
 
-        private IEnumerable<Account> ApplySort(IEnumerable<Account> source)
+        private void Grid_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
         {
-            switch (sortColumn)
+            if (e.RowIndex < 0 || e.ColumnIndex < 0 || !(grid.Rows[e.RowIndex].DataBoundItem is Account account))
             {
-                case nameof(Account.Service):
-                    return Sort(source, a => a.Service, StringComparer.OrdinalIgnoreCase);
-                case nameof(Account.Username):
-                    return Sort(source, a => a.Username, StringComparer.OrdinalIgnoreCase);
-                case nameof(Account.Url):
-                    return Sort(source, a => a.Url, StringComparer.OrdinalIgnoreCase);
-                case nameof(Account.Notes):
-                    return Sort(source, a => a.Notes, StringComparer.OrdinalIgnoreCase);
-                // Nulls (entries with no timestamp) sort first in ascending order via the
-                // default DateTime? comparer - reasonable as "unknown/oldest" by default.
-                case nameof(Account.CreatedAt):
-                    return Sort(source, a => a.CreatedAt, Comparer<DateTime?>.Default);
-                case nameof(Account.ModifiedAt):
-                    return Sort(source, a => a.ModifiedAt, Comparer<DateTime?>.Default);
-                default:
-                    return source;
+                return; // Nothing bound yet, or not a real data row
             }
+
+            bool isSelected = (e.State & DataGridViewElementStates.Selected) == DataGridViewElementStates.Selected;
+            bool isHovered = e.RowIndex == hoveredRowIndex && !isSelected;
+
+            Color background = isSelected
+                ? AppTheme.AccentSubtle
+                : isHovered
+                    ? AppTheme.PanelBackground
+                    : e.CellStyle.BackColor; // Respects the stale-entry highlight set above, or the grid's default fill otherwise
+
+            using (var backgroundBrush = new SolidBrush(background))
+            {
+                e.Graphics.FillRectangle(backgroundBrush, e.CellBounds);
+            }
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            // Service-initial badge, standing in for a real per-service icon.
+            const int badgeSize = 36;
+            var badgeRect = new Rectangle(
+                e.CellBounds.Left + 14,
+                e.CellBounds.Top + (e.CellBounds.Height - badgeSize) / 2,
+                badgeSize,
+                badgeSize);
+
+            Color badgeColor = ServiceBadgeColors[StableHash(account.Service ?? string.Empty) % ServiceBadgeColors.Length];
+            using (var badgeBrush = new SolidBrush(badgeColor))
+            using (var badgePath = RoundedRect(badgeRect, 8))
+            {
+                e.Graphics.FillPath(badgeBrush, badgePath);
+            }
+
+            string initial = string.IsNullOrWhiteSpace(account.Service) ? "?" : account.Service.Trim().Substring(0, 1).ToUpperInvariant();
+            using (var badgeFont = new Font(AppTheme.Base.FontFamily, 13f, FontStyle.Bold))
+            {
+                TextRenderer.DrawText(e.Graphics, initial, badgeFont, badgeRect, Color.White,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            }
+
+            // Service name (top line) and username (bottom line), each ellipsised
+            // independently rather than manually measured - TextRenderer handles that.
+            int textLeft = badgeRect.Right + 12;
+            int textRight = e.CellBounds.Right - 56; // Leaves room for the star/chevron on the right
+            int textWidth = Math.Max(0, textRight - textLeft);
+            int lineHeight = (e.CellBounds.Height - 8) / 2;
+            var serviceRect = new Rectangle(textLeft, e.CellBounds.Top + 4, textWidth, lineHeight);
+            var usernameRect = new Rectangle(textLeft, serviceRect.Bottom, textWidth, lineHeight);
+
+            string serviceText = string.IsNullOrEmpty(account.Service) ? "(no service name)" : account.Service;
+            const TextFormatFlags textFlags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+
+            using (var serviceFont = new Font(AppTheme.Base.FontFamily, 9.5f, FontStyle.Bold))
+            {
+                TextRenderer.DrawText(e.Graphics, serviceText, serviceFont, serviceRect, AppTheme.TextPrimary, textFlags);
+            }
+
+            TextRenderer.DrawText(e.Graphics, account.Username ?? string.Empty, AppTheme.Base, usernameRect, AppTheme.TextSecondary, textFlags);
+
+            // Favourite star and a trailing chevron, matching the reference design's list-
+            // item structure. Both are purely decorative for now - there's no Favourites
+            // feature yet to back the star (a later stage, once the core list layout and
+            // details panel are both settled).
+            using (var glyphFont = new Font(AppTheme.Base.FontFamily, 12f))
+            {
+                var starRect = new Rectangle(e.CellBounds.Right - 52, e.CellBounds.Top, 24, e.CellBounds.Height);
+                TextRenderer.DrawText(e.Graphics, "☆", glyphFont, starRect, AppTheme.Border,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+
+                var chevronRect = new Rectangle(e.CellBounds.Right - 26, e.CellBounds.Top, 20, e.CellBounds.Height);
+                TextRenderer.DrawText(e.Graphics, "›", glyphFont, chevronRect, AppTheme.TextSecondary,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            }
+
+            // Thin divider between entries, replacing the grid's own default gridlines
+            // (disabled - see MainForm's CellBorderStyle setting) for full control over it.
+            using (var dividerPen = new Pen(AppTheme.Border))
+            {
+                e.Graphics.DrawLine(dividerPen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right, e.CellBounds.Bottom - 1);
+            }
+
+            e.Handled = true;
         }
 
-        private IEnumerable<Account> Sort<TKey>(IEnumerable<Account> source, Func<Account, TKey> keySelector, IComparer<TKey> comparer)
+        private void Grid_CellMouseMove(object sender, DataGridViewCellMouseEventArgs e)
         {
-            return sortAscending
-                ? source.OrderBy(keySelector, comparer)
-                : source.OrderByDescending(keySelector, comparer);
-        }
-
-        private void Grid_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
-        {
-            if (e.Button != MouseButtons.Left)
+            if (e.RowIndex == hoveredRowIndex)
             {
-                return; // Right-click is handled by headerContextMenu (Configure Columns...) instead
-            }
-
-            string columnName = grid.Columns[e.ColumnIndex].Name;
-
-            if (columnName == nameof(Account.Password))
-            {
-                return; // Deliberately not sortable, same reasoning as excluding it from search
-            }
-
-            if (sortColumn == columnName)
-            {
-                sortAscending = !sortAscending; // Clicking the same column again reverses direction
-            }
-            else
-            {
-                sortColumn = columnName;
-                sortAscending = true;
-            }
-
-            RefreshInternal(); // Re-applies the (now-changed) sort using the last-seen accounts/search text
-        }
-
-        private void ConfigureColumns_Click(object sender, EventArgs e)
-        {
-            // Built from the grid's live columns (name + current header text + current
-            // visibility) rather than a hardcoded list, so the dialog always matches
-            // whatever's actually on the grid - nothing to keep in sync by hand.
-            var columnStates = grid.Columns
-                .Cast<DataGridViewColumn>()
-                .Select(c => (Name: c.Name, Header: c.HeaderText, Visible: c.Visible))
-                .ToList();
-
-            using (var configForm = new ColumnConfigForm(columnStates))
-            {
-                if (configForm.ShowDialog(grid.FindForm()) != DialogResult.OK)
-                {
-                    return;
-                }
-
-                hiddenColumns.Clear();
-                foreach (var entry in configForm.SelectedVisibility)
-                {
-                    if (!entry.Value)
-                    {
-                        hiddenColumns.Add(entry.Key);
-                    }
-
-                    // Apply immediately to the live columns rather than waiting for the next
-                    // Refresh() - there's no reason to force a full filter+sort+rebind just
-                    // to toggle visibility, and this keeps the current selection/scroll
-                    // position intact. The string indexer returns null instead of throwing
-                    // when a column by that name doesn't exist.
-                    var liveColumn = grid.Columns[entry.Key];
-                    if (liveColumn != null)
-                    {
-                        liveColumn.Visible = entry.Value;
-                    }
-                }
-
-                ColumnVisibilityStore.SaveHiddenColumns(hiddenColumns);
-            }
-        }
-
-        private void Grid_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            string columnName = grid.Columns[e.ColumnIndex].Name;
-
-            if (columnName == nameof(Account.Password))
-            {
-                if (!(grid.Rows[e.RowIndex].DataBoundItem is Account account) || isPasswordRevealed(account))
-                {
-                    return; // Either not a real data row, or this row has been revealed - show the real value
-                }
-
-                // Fixed-length mask regardless of the actual password's length, so the mask
-                // itself doesn't leak how long the real password is.
-                e.Value = "••••••••";
-                e.FormattingApplied = true;
                 return;
             }
 
-            if (columnName == nameof(Account.CreatedAt) || columnName == nameof(Account.ModifiedAt))
+            int previousHoveredRow = hoveredRowIndex;
+            hoveredRowIndex = e.RowIndex;
+
+            if (previousHoveredRow >= 0 && previousHoveredRow < grid.Rows.Count)
             {
-                // Null means this entry was saved before these fields existed - show a
-                // placeholder rather than a misleading default date.
-                e.Value = e.Value is DateTime dateValue ? dateValue.ToString("g") : "-";
-                e.FormattingApplied = true;
+                grid.InvalidateRow(previousHoveredRow);
+            }
+
+            if (hoveredRowIndex >= 0)
+            {
+                grid.InvalidateRow(hoveredRowIndex);
+            }
+        }
+
+        private void Grid_MouseLeave(object sender, EventArgs e)
+        {
+            if (hoveredRowIndex < 0)
+            {
+                return;
+            }
+
+            int previousHoveredRow = hoveredRowIndex;
+            hoveredRowIndex = -1;
+            grid.InvalidateRow(previousHoveredRow);
+        }
+
+        private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
+        {
+            int diameter = radius * 2;
+            var path = new GraphicsPath();
+            path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+            path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        // A small, stable (non-randomised) hash so the same service name always maps to the
+        // same badge colour, including across app restarts. string.GetHashCode() itself is
+        // randomised per-process in modern .NET (to resist hash-flooding attacks) and isn't
+        // safe to use for anything that needs to stay consistent between runs.
+        private static int StableHash(string value)
+        {
+            unchecked
+            {
+                int hash = 17;
+                foreach (char c in value)
+                {
+                    hash = hash * 31 + c;
+                }
+
+                return hash & int.MaxValue; // Clear the sign bit so % always returns a non-negative index
             }
         }
 
