@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -15,7 +16,9 @@ namespace PasswordManager
         private Panel rightDetailsPanel;
         private Label rightDetailsPlaceholder;
         private Panel detailsContentPanel;
+        private ServiceBadgeControl serviceBadge;
         private Label lblDetailsService;
+        private Label lblDetailsUrlLink;
         private Label lblDetailsUsername;
         private Label lblDetailsPassword;
         private Button btnDetailsTogglePassword;
@@ -272,29 +275,64 @@ namespace PasswordManager
 
             this.detailsContentPanel = new Panel { Dock = DockStyle.Fill, Visible = false };
 
+            // Header: service icon badge, service name + clickable website link stacked
+            // beside it, and a decorative favourite star (no Favourites feature yet to
+            // back it - see ServiceBadge.cs / AccountGridPresenter for the same note on
+            // the list's own star).
+            const int headerHeight = 64;
+            this.serviceBadge = new ServiceBadgeControl { Size = new System.Drawing.Size(48, 48) };
+            this.serviceBadge.Location = new System.Drawing.Point(0, (headerHeight - this.serviceBadge.Height) / 2);
+            var badgeWrapper = new Panel { Dock = DockStyle.Left, Width = 60, BackColor = AppTheme.PanelBackground };
+            badgeWrapper.Controls.Add(this.serviceBadge);
+
+            var lblDetailsFavoriteStar = new Label
+            {
+                Text = "☆",
+                Dock = DockStyle.Right,
+                Width = 32,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 14f),
+                ForeColor = AppTheme.Border,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+
             lblDetailsService = new Label
             {
-                // AutoSize (rather than Dock = Fill) so the TableLayoutPanel's AutoSize row
-                // can read this label's true preferred height for its 14pt bold font. With
-                // Dock = Fill and AutoSize off, the row had no reliable height to measure
-                // against and ended up too short, clipping the bottom of the text.
                 AutoSize = true,
                 Font = AppTheme.Heading,
                 ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                Margin = new Padding(10, 10, 0, 4)
+                Margin = new Padding(0)
             };
-
-            lblDetailsUsername = new Label
+            lblDetailsUrlLink = new Label
             {
-                AutoSize = false,
-                AutoEllipsis = true, // Long values (e.g. full emails) get "..." instead of forcing the row to wrap
-                Width = 150,
-                Height = 20,
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                AutoSize = true,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.Accent,
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 2, 0, 0)
             };
-            var btnDetailsCopyUsername = DialogControls.CreateInlineActionButton("Copy", 60, 24);
+            lblDetailsUrlLink.Click += (sender, e) => OpenSelectedAccountUrl();
+
+            var serviceTextStack = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                BackColor = AppTheme.PanelBackground,
+                Padding = new Padding(4, 6, 0, 0)
+            };
+            serviceTextStack.Controls.Add(lblDetailsService);
+            serviceTextStack.Controls.Add(lblDetailsUrlLink);
+
+            var headerRow = new Panel { Dock = DockStyle.Top, Height = headerHeight, BackColor = AppTheme.PanelBackground };
+            headerRow.Controls.Add(serviceTextStack);
+            headerRow.Controls.Add(badgeWrapper);
+            headerRow.Controls.Add(lblDetailsFavoriteStar);
+
+            // Username / Password / Website fields, each a caption above a bordered "field
+            // box" (DialogControls.CreateBorderedFieldRow) with inline action buttons -
+            // replacing the old plain "Caption: value" rows (CreateDetailRow, now removed).
+            lblDetailsUsername = new Label { AutoSize = false, AutoEllipsis = true, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            var btnDetailsCopyUsername = DialogControls.CreateInlineActionButton("Copy", 56, 26);
             btnDetailsCopyUsername.Click += (sender, e) =>
             {
                 if (dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount)
@@ -302,17 +340,10 @@ namespace PasswordManager
                     clipboardGuard.CopyAndAutoClear(selectedAccount.Username);
                 }
             };
+            var usernameGroup = DialogControls.CreateFieldGroup("USERNAME", DialogControls.CreateBorderedFieldRow(lblDetailsUsername, btnDetailsCopyUsername), 34);
 
-            lblDetailsPassword = new Label
-            {
-                AutoSize = false,
-                AutoEllipsis = true,
-                Width = 100,
-                Height = 20,
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
-            };
-            btnDetailsTogglePassword = DialogControls.CreateInlineActionButton("Show", 60, 24);
+            lblDetailsPassword = new Label { AutoSize = false, AutoEllipsis = true, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            btnDetailsTogglePassword = DialogControls.CreateInlineActionButton("Show", 56, 26);
             btnDetailsTogglePassword.Click += (sender, e) =>
             {
                 if (!(dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount))
@@ -324,7 +355,7 @@ namespace PasswordManager
                 dgvAccounts.InvalidateRow(dgvAccounts.CurrentRow.Index); // Keep the grid's own masking in sync too
                 RefreshDetailsPanel();
             };
-            var btnDetailsCopyPassword = DialogControls.CreateInlineActionButton("Copy", 60, 24);
+            var btnDetailsCopyPassword = DialogControls.CreateInlineActionButton("Copy", 56, 26);
             btnDetailsCopyPassword.Click += (sender, e) =>
             {
                 if (dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount)
@@ -332,38 +363,55 @@ namespace PasswordManager
                     clipboardGuard.CopyAndAutoClear(selectedAccount.Password);
                 }
             };
+            var passwordGroup = DialogControls.CreateFieldGroup("PASSWORD", DialogControls.CreateBorderedFieldRow(lblDetailsPassword, btnDetailsTogglePassword, btnDetailsCopyPassword), 34);
 
-            lblDetailsUrl = new Label { AutoSize = true, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            lblDetailsUrl = new Label { AutoSize = false, AutoEllipsis = true, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            var btnDetailsOpenUrl = DialogControls.CreateInlineActionButton("Open", 56, 26);
+            btnDetailsOpenUrl.Click += (sender, e) => OpenSelectedAccountUrl();
+            var urlGroup = DialogControls.CreateFieldGroup("WEBSITE", DialogControls.CreateBorderedFieldRow(lblDetailsUrl, btnDetailsOpenUrl), 34);
 
             txtDetailsNotes = new TextBox
             {
                 Multiline = true,
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
-                Height = 60,
-                Width = 160,
-                BorderStyle = BorderStyle.FixedSingle,
+                BorderStyle = BorderStyle.None, // The bordered field row wrapping this provides the border instead - a second one here would double up
                 ForeColor = AppTheme.TextPrimary,
                 BackColor = AppTheme.Surface
             };
+            var notesGroup = DialogControls.CreateFieldGroup("NOTES", DialogControls.CreateBorderedFieldRow(txtDetailsNotes), 90);
 
-            lblDetailsCreated = new Label { AutoSize = true, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
-            lblDetailsModified = new Label { AutoSize = true, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            // Created/Modified side by side rather than stacked, matching the reference -
+            // plain text, not boxed like the fields above, since they're not editable/
+            // actionable.
+            lblDetailsCreated = new Label { AutoSize = true, Font = AppTheme.Base, ForeColor = AppTheme.TextPrimary };
+            lblDetailsModified = new Label { AutoSize = true, Font = AppTheme.Base, ForeColor = AppTheme.TextPrimary };
+            var createdStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+            createdStack.Controls.Add(new Label { Text = "CREATED", AutoSize = true, Font = AppTheme.Caption, ForeColor = AppTheme.TextSecondary });
+            createdStack.Controls.Add(lblDetailsCreated);
+            var modifiedStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+            modifiedStack.Controls.Add(new Label { Text = "MODIFIED", AutoSize = true, Font = AppTheme.Caption, ForeColor = AppTheme.TextSecondary });
+            modifiedStack.Controls.Add(lblDetailsModified);
 
-            var detailsLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8 };
-            for (int i = 0; i < 7; i++)
-            {
-                detailsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            }
-            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Spacer - absorbs leftover space
+            var metadataRow = new TableLayoutPanel { Dock = DockStyle.Top, Height = 44, ColumnCount = 2, RowCount = 1 };
+            metadataRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            metadataRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            metadataRow.Controls.Add(createdStack, 0, 0);
+            metadataRow.Controls.Add(modifiedStack, 1, 0);
 
-            detailsLayout.Controls.Add(lblDetailsService, 0, 0);
-            detailsLayout.Controls.Add(CreateDetailRow("Username:", lblDetailsUsername, btnDetailsCopyUsername), 0, 1);
-            detailsLayout.Controls.Add(CreateDetailRow("Password:", lblDetailsPassword, btnDetailsTogglePassword, btnDetailsCopyPassword), 0, 2);
-            detailsLayout.Controls.Add(CreateDetailRow("URL:", lblDetailsUrl), 0, 3);
-            detailsLayout.Controls.Add(CreateDetailRow("Notes:", txtDetailsNotes), 0, 4);
-            detailsLayout.Controls.Add(CreateDetailRow("Created:", lblDetailsCreated), 0, 5);
-            detailsLayout.Controls.Add(CreateDetailRow("Modified:", lblDetailsModified), 0, 6);
+            // Scrollable body so a longer-than-expected layout (small window, larger DPI/
+            // font) grows a scrollbar instead of clipping a field - same safety-net pattern
+            // used throughout the dialogs.
+            var detailsScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 12, 16, 12) };
+
+            // Dock=Top siblings stack in reverse of add order (last added ends up closest
+            // to the top edge) - same quirk called out throughout the dialogs.
+            detailsScroll.Controls.Add(metadataRow);
+            detailsScroll.Controls.Add(notesGroup);
+            detailsScroll.Controls.Add(urlGroup);
+            detailsScroll.Controls.Add(passwordGroup);
+            detailsScroll.Controls.Add(usernameGroup);
+            detailsScroll.Controls.Add(headerRow);
 
             // Edit and Delete reuse the exact same handlers as the context menu's Edit
             // Entry/Delete Entry items - both already operate on whatever's currently
@@ -382,7 +430,7 @@ namespace PasswordManager
             detailsActionsPanel.Controls.Add(btnDetailsDelete);
             detailsActionsPanel.Controls.Add(btnDetailsEdit);
 
-            this.detailsContentPanel.Controls.Add(detailsLayout);
+            this.detailsContentPanel.Controls.Add(detailsScroll);
             this.detailsContentPanel.Controls.Add(detailsActionsPanel);
 
             this.rightDetailsPanel.Controls.Add(this.detailsContentPanel);
@@ -534,75 +582,6 @@ namespace PasswordManager
             return button;
         }
 
-        /// Builds one "Caption: value [buttons]" row for the details panel, keeping every
-        /// row's layout consistent without repeating the same FlowLayoutPanel setup each time.
-        private static Control CreateDetailRow(string caption, Control valueControl, params Control[] extraControls)
-        {
-            // A FlowLayoutPanel was used here previously, but it wraps to a new line
-            // whenever caption + value + buttons don't all fit on one row - which is
-            // exactly what was happening to the Username/Password rows (buttons ended up
-            // stranded on their own line below). A TableLayoutPanel with a dedicated,
-            // never-shrinking column for the buttons keeps them pinned to the right of the
-            // row instead: the value column simply ellipsizes if it runs out of room.
-            var row = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                ColumnCount = 3,
-                RowCount = 1,
-                Padding = new Padding(10, 5, 10, 5)
-            };
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));   // Caption
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // Value - takes whatever space is left
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));   // Buttons - always keeps its full width
-
-            var captionLabel = new Label
-            {
-                Text = caption,
-                AutoSize = true,
-                Font = AppTheme.Caption,
-                ForeColor = AppTheme.TextSecondary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                Margin = new Padding(0, 3, 8, 0)
-            };
-
-            valueControl.Margin = new Padding(0, 3, 8, 0);
-            if (valueControl is Label || valueControl is TextBox)
-            {
-                // Stretches to fill the column's available width instead of sitting at its
-                // initial fixed Width - this is what makes the Notes box (the only TextBox
-                // passed here) fill the panel instead of leaving blank space to its right.
-                // (The old condition here excluded TextBox, but "is Label && not TextBox" was
-                // always equivalent to just "is Label" - TextBox can never satisfy "is Label"
-                // in the first place - so the exclusion never did anything except leave
-                // Notes un-stretched.)
-                valueControl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            }
-
-            row.Controls.Add(captionLabel, 0, 0);
-            row.Controls.Add(valueControl, 1, 0);
-
-            if (extraControls.Length > 0)
-            {
-                var buttonsPanel = new FlowLayoutPanel
-                {
-                    FlowDirection = FlowDirection.LeftToRight,
-                    AutoSize = true,
-                    AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                    WrapContents = false,
-                    Margin = new Padding(0)
-                };
-                foreach (Control extra in extraControls)
-                {
-                    buttonsPanel.Controls.Add(extra);
-                }
-                row.Controls.Add(buttonsPanel, 2, 0);
-            }
-
-            return row;
-        }
-
         /// Updates the right-hand details panel to match whatever's currently selected in
         /// the grid, or shows the placeholder if nothing is selected. Reads password reveal
         /// state from the same passwordRevealTracker the grid itself uses, so the two always
@@ -621,7 +600,10 @@ namespace PasswordManager
 
             bool isRevealed = passwordRevealTracker.IsRevealed(selectedAccount);
 
+            serviceBadge.ServiceName = selectedAccount.Service;
             lblDetailsService.Text = selectedAccount.Service;
+            lblDetailsUrlLink.Text = selectedAccount.Url;
+            lblDetailsUrlLink.Visible = !string.IsNullOrEmpty(selectedAccount.Url);
             lblDetailsUsername.Text = selectedAccount.Username;
             lblDetailsPassword.Text = isRevealed ? selectedAccount.Password : "••••••••";
             btnDetailsTogglePassword.Text = isRevealed ? "Hide" : "Show";
@@ -629,6 +611,31 @@ namespace PasswordManager
             txtDetailsNotes.Text = selectedAccount.Notes;
             lblDetailsCreated.Text = selectedAccount.CreatedAt is DateTime created ? created.ToString("g") : "-";
             lblDetailsModified.Text = selectedAccount.ModifiedAt is DateTime modified ? modified.ToString("g") : "-";
+        }
+
+        /// Opens the selected entry's URL in the system's default browser - used by both
+        /// the header's clickable link and the Website field's "Open" button.
+        private void OpenSelectedAccountUrl()
+        {
+            if (!(dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount) || string.IsNullOrWhiteSpace(selectedAccount.Url))
+            {
+                return;
+            }
+
+            string url = selectedAccount.Url.Trim();
+            if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                url = "https://" + url; // Most saved URLs are stored without a scheme (e.g. "youtube.com") - Process.Start needs one
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not open this URL: {ex.Message}", "Open URL Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void Accounts_ListChanged(object sender, ListChangedEventArgs e)

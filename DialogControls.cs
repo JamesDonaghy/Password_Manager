@@ -155,5 +155,35 @@ namespace PasswordManager
             button.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
             return button;
         }
+
+        /// Wraps a read-only value control (and optional trailing action buttons, e.g.
+        /// Copy/Show/Open) in a bordered, white "field box" - the same hairline-border-plus-
+        /// white-inset look already established for the search box and AddEntryForm's
+        /// inputs, applied here to read-only details-panel fields instead of editable ones.
+        public static Panel CreateBorderedFieldRow(Control valueControl, params Control[] trailingButtons)
+        {
+            var border = new Panel { BackColor = AppTheme.Border, Padding = new Padding(1) };
+
+            // Only drop the right padding when there's a trailing button to sit flush
+            // against the edge - a field with no button (just Notes, currently) still
+            // needs its own breathing room on that side for the text itself.
+            int rightPadding = trailingButtons.Length > 0 ? 0 : 10;
+            var inset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(10, 0, rightPadding, 0) };
+
+            valueControl.Dock = DockStyle.Fill;
+            inset.Controls.Add(valueControl);
+
+            // Right-docked siblings render in the order added (unlike Top/Left, where it's
+            // reversed) - the last one added lands flush against the true right edge - so
+            // adding left-to-right in reading order here places trailing buttons correctly.
+            foreach (Control button in trailingButtons)
+            {
+                button.Dock = DockStyle.Right;
+                inset.Controls.Add(button);
+            }
+
+            border.Controls.Add(inset);
+            return border;
+        }
     }
 }

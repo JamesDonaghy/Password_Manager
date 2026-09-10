@@ -5,7 +5,6 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
-
 namespace PasswordManager
 {
     /// <summary>
@@ -29,22 +28,6 @@ namespace PasswordManager
         // has no built-in concept of row hover, so this is tracked manually and the
         // affected rows are invalidated (repainted) on change.
         private int hoveredRowIndex = -1;
-
-        // Palette for the service-initial badge (see Grid_CellPainting) - a real per-
-        // service icon system (fetching/caching actual brand icons) is a bigger feature for
-        // later; this is a lightweight stand-in in the same spirit as a contact app's
-        // coloured-initial avatars.
-        private static readonly Color[] ServiceBadgeColors =
-        {
-            AppTheme.Accent,
-            Color.FromArgb(0xE0, 0x6C, 0x3D), // Orange
-            Color.FromArgb(0x2F, 0x9E, 0x6B), // Green
-            Color.FromArgb(0xD1, 0x4B, 0x7A), // Rose
-            Color.FromArgb(0x3B, 0x82, 0xC4), // Blue
-            Color.FromArgb(0x8A, 0x5C, 0xD6), // Violet
-            Color.FromArgb(0xC4, 0x8A, 0x2F), // Amber
-            Color.FromArgb(0x4F, 0xA8, 0xA3), // Teal
-        };
 
         public AccountGridPresenter(DataGridView grid)
         {
@@ -142,14 +125,14 @@ namespace PasswordManager
                 badgeSize,
                 badgeSize);
 
-            Color badgeColor = ServiceBadgeColors[StableHash(account.Service ?? string.Empty) % ServiceBadgeColors.Length];
+            Color badgeColor = ServiceBadge.ColorFor(account.Service);
             using (var badgeBrush = new SolidBrush(badgeColor))
-            using (var badgePath = RoundedRect(badgeRect, 8))
+            using (var badgePath = ServiceBadge.RoundedRect(badgeRect, 8))
             {
                 e.Graphics.FillPath(badgeBrush, badgePath);
             }
 
-            string initial = string.IsNullOrWhiteSpace(account.Service) ? "?" : account.Service.Trim().Substring(0, 1).ToUpperInvariant();
+            string initial = ServiceBadge.InitialFor(account.Service);
             using (var badgeFont = new Font(AppTheme.Base.FontFamily, 13f, FontStyle.Bold))
             {
                 TextRenderer.DrawText(e.Graphics, initial, badgeFont, badgeRect, Color.White,
@@ -231,36 +214,6 @@ namespace PasswordManager
             int previousHoveredRow = hoveredRowIndex;
             hoveredRowIndex = -1;
             grid.InvalidateRow(previousHoveredRow);
-        }
-
-        private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
-        {
-            int diameter = radius * 2;
-            var path = new GraphicsPath();
-            path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
-            path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
-            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
-            path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
-            path.CloseFigure();
-            return path;
-        }
-
-        // A small, stable (non-randomised) hash so the same service name always maps to the
-        // same badge colour, including across app restarts. string.GetHashCode() itself is
-        // randomised per-process in modern .NET (to resist hash-flooding attacks) and isn't
-        // safe to use for anything that needs to stay consistent between runs.
-        private static int StableHash(string value)
-        {
-            unchecked
-            {
-                int hash = 17;
-                foreach (char c in value)
-                {
-                    hash = hash * 31 + c;
-                }
-
-                return hash & int.MaxValue; // Clear the sign bit so % always returns a non-negative index
-            }
         }
 
         private static bool Contains(string value, string searchText)
