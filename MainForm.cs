@@ -12,7 +12,9 @@ namespace PasswordManager
         private DataGridView dgvAccounts;
         private TextBox txtSearch;
         private Label lblEntryCount;
+        private Label lblSidebarAllItemsCount;
         private Panel leftNavPanel;
+        private Panel selectedNavRow; // Whichever sidebar nav row (All Items/Favorites/Security/Settings) is currently highlighted - see CreateNavRow/SelectNavRow
         private Panel rightDetailsPanel;
         private Label rightDetailsPlaceholder;
         private Panel detailsContentPanel;
@@ -217,7 +219,8 @@ namespace PasswordManager
             {
                 Dock = DockStyle.Fill,
                 BackColor = AppTheme.PanelBackground,
-                BorderStyle = BorderStyle.None
+                BorderStyle = BorderStyle.None,
+                AutoScroll = true // Safety net now that the sidebar holds many more items than before - scrolls rather than clipping on a short window
             };
 
             // Thin hairline in place of the previous FixedSingle 3D border - separates
@@ -229,19 +232,40 @@ namespace PasswordManager
                 BackColor = AppTheme.Border
             };
 
-            var btnSettings = CreateNavButton("Change Master Password", ChangeMasterPassword_Click); // Same handler as the existing Settings menu item
-            var btnRestoreVault = CreateNavButton("Restore Vault", RestoreVault_Click); // Same handler as the existing menu item
-            var btnBackupVault = CreateNavButton("Backup Vault", BackupVault_Click); // Same handler as the existing menu item
-            var btnLock = CreateNavButton("🔒 Lock", Lock_Click); // Same handler as the existing menu item
+            // All four sidebar entries below are "nav rows" built by CreateNavRow, so they
+            // all get the same purple-highlight-plus-accent-bar look and only one is ever
+            // highlighted at a time - see CreateNavRow/SelectNavRow further down. This used
+            // to be styling unique to "All Items" (a plain Button for the other three, which
+            // meant clicking them only ever showed the default focus-rectangle outline and
+            // never picked up the highlight, and "All Items" could never lose it).
+            this.lblSidebarAllItemsCount = new Label { Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight, Padding = new Padding(0, 0, 14, 0) };
+            var allItemsRow = CreateNavRow("🗂️ All Items", this.lblSidebarAllItemsCount);
+            var btnFavorites = CreateNavRow("⭐ Favorites", null); // Not wired to a real view yet - no Favourites feature to back it (see ServiceBadge/AccountGridPresenter's own placeholder star)
+            var btnSecurity = CreateNavRow("🛡️ Security", null); // Placeholder - no security dashboard yet
+            var btnSettingsNav = CreateNavRow("⚙️ Settings", null); // Placeholder - Change Master Password/Backup/Restore are reached via the top Settings menu for now (see below)
 
-            // Stacked Dock=Top siblings render in reverse of the order added (last added
-            // ends up closest to the top edge) - see the earlier menu bar/search box fix
-            // for why this is called out explicitly rather than assumed. Lock is added last
-            // so it sits at the very top, above the rest - it's the one nav action someone
-            // needs to reach for quickly.
-            this.leftNavPanel.Controls.Add(btnSettings);
-            this.leftNavPanel.Controls.Add(btnRestoreVault);
-            this.leftNavPanel.Controls.Add(btnBackupVault);
+            SelectNavRow(allItemsRow); // "All Items" is the view shown on load, so it starts out highlighted
+
+            var btnLock = CreateNavButton("🔒 Lock Vault", Lock_Click);
+            btnLock.Dock = DockStyle.Bottom; // Pinned to the very bottom regardless of how much is stacked above it, unlike every other nav item here
+
+            var sectionDividerSpacer = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.PanelBackground };
+            var sectionDividerLine = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = AppTheme.Border };
+
+            // Dock=Top siblings stack in reverse of add order (last added ends up closest
+            // to the top edge) - same quirk called out throughout this file - so everything
+            // below is added bottom-to-top of its intended visual position. Lock Vault uses
+            // Dock=Bottom instead (set above), pinning it to the very bottom regardless of
+            // how much is stacked above it, leaving a gap in between - matching the
+            // reference design.
+            this.leftNavPanel.Controls.Add(btnSettingsNav);
+            this.leftNavPanel.Controls.Add(btnSecurity);
+            this.leftNavPanel.Controls.Add(sectionDividerLine);
+            this.leftNavPanel.Controls.Add(sectionDividerSpacer);
+            this.leftNavPanel.Controls.Add(btnFavorites);
+            this.leftNavPanel.Controls.Add(allItemsRow);
+            this.leftNavPanel.Controls.Add(CreateSidebarSectionLabel("VAULT"));
+
             this.leftNavPanel.Controls.Add(btnLock);
             this.leftNavPanel.Controls.Add(leftNavDivider);
 
@@ -559,27 +583,146 @@ namespace PasswordManager
             dgvAccounts.ReadOnly = true;
         }
 
-        /// Builds one left-nav button with the app's flat, hover-tinted style, keeping
-        /// all three nav buttons visually identical without repeating the same setup.
-        private static Button CreateNavButton(string text, EventHandler onClick)
+        /// Builds one left-nav action row (currently just "Lock Vault") with the exact same
+        /// flat, hover-tinted look as the selectable rows from CreateNavRow below - a Label
+        /// docked inside a Panel, no borders. Previously this was a plain Button, which - even
+        /// with FlatStyle.Flat and BorderSize 0 - still gets a system-drawn focus/hover box
+        /// and a different font from the ambient theme, so it stood out from the rest of the
+        /// sidebar instead of matching it. Unlike CreateNavRow, the click here fires the given
+        /// action directly rather than going through SelectNavRow, since Lock Vault triggers a
+        /// one-off action rather than switching to a persistent selected view.
+        private static Panel CreateNavButton(string text, EventHandler onClick)
         {
-            var button = new Button
+            var label = new Label
             {
                 Text = text,
-                Dock = DockStyle.Top,
-                Height = 42,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = AppTheme.PanelBackground,
+                Dock = DockStyle.Fill,
+                Font = AppTheme.Base,
                 ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
                 Padding = new Padding(14, 0, 0, 0),
                 Cursor = Cursors.Hand
             };
-            button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
-            button.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
-            button.Click += onClick;
-            return button;
+
+            var row = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 42,
+                BackColor = AppTheme.PanelBackground,
+                Cursor = Cursors.Hand
+            };
+            row.Controls.Add(label);
+
+            row.Click += onClick;
+            label.Click += onClick;
+
+            EventHandler hoverOn = (s, e) => row.BackColor = AppTheme.AccentSubtle;
+            EventHandler hoverOff = (s, e) => row.BackColor = AppTheme.PanelBackground;
+            row.MouseEnter += hoverOn;
+            row.MouseLeave += hoverOff;
+            label.MouseEnter += hoverOn;
+            label.MouseLeave += hoverOff;
+
+            return row;
+        }
+
+        /// Builds one selectable left-nav row: a text label plus a left accent bar that's
+        /// only shown while the row is selected, both wrapped in a Panel so the whole row
+        /// highlights (and clicks) as a single unit. An optional trailing label (currently
+        /// just the "All Items" entry count) docks to the right. This is what gives every
+        /// sidebar entry the same purple-highlight look "All Items" used to have alone -
+        /// see SelectNavRow for how the highlight actually moves between rows on click.
+        private Panel CreateNavRow(string text, Label trailingLabel)
+        {
+            var accentBar = new Panel { Dock = DockStyle.Left, Width = 3, BackColor = AppTheme.Accent, Visible = false };
+            var label = new Label
+            {
+                Text = text,
+                Dock = DockStyle.Fill,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Padding = new Padding(14, 0, 0, 0),
+                Cursor = Cursors.Hand
+            };
+
+            var row = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 42,
+                BackColor = AppTheme.PanelBackground,
+                Cursor = Cursors.Hand
+            };
+            row.Controls.Add(label);
+            if (trailingLabel != null)
+            {
+                row.Controls.Add(trailingLabel);
+            }
+            row.Controls.Add(accentBar);
+            row.Tag = accentBar; // Stashed on the row itself so SelectNavRow can flip it on/off without a separate row->accentBar lookup
+
+            // The label docks over the entire row, so in practice it's what receives mouse
+            // clicks/hovers, not the row panel underneath it - both are wired to the same
+            // handlers so the row behaves the same no matter where on it the pointer is.
+            EventHandler select = (s, e) => SelectNavRow(row);
+            row.Click += select;
+            label.Click += select;
+
+            EventHandler hoverOn = (s, e) => { if (row != selectedNavRow) row.BackColor = AppTheme.AccentSubtle; };
+            EventHandler hoverOff = (s, e) => { if (row != selectedNavRow) row.BackColor = AppTheme.PanelBackground; };
+            row.MouseEnter += hoverOn;
+            row.MouseLeave += hoverOff;
+            label.MouseEnter += hoverOn;
+            label.MouseLeave += hoverOff;
+
+            return row;
+        }
+
+        /// Moves the sidebar's purple highlight (background + left accent bar) onto the
+        /// given row, clearing it off whichever row had it before. Called on every nav-row
+        /// click, and once up front to give "All Items" the initial highlight - so exactly
+        /// one row is ever highlighted at a time, instead of "All Items" being permanently
+        /// stuck highlighted while everything else stays unhighlighted no matter what's
+        /// clicked.
+        private void SelectNavRow(Panel row)
+        {
+            if (selectedNavRow == row)
+            {
+                return;
+            }
+
+            if (selectedNavRow != null)
+            {
+                selectedNavRow.BackColor = AppTheme.PanelBackground;
+                if (selectedNavRow.Tag is Panel previousAccentBar)
+                {
+                    previousAccentBar.Visible = false;
+                }
+            }
+
+            row.BackColor = AppTheme.AccentSubtle;
+            if (row.Tag is Panel accentBar)
+            {
+                accentBar.Visible = true;
+            }
+
+            selectedNavRow = row;
+        }
+
+        /// Small caption-style section header for the sidebar (e.g. "VAULT", "CATEGORIES") -
+        /// not interactive, just a grouping label.
+        private static Label CreateSidebarSectionLabel(string text)
+        {
+            return new Label
+            {
+                Text = text,
+                Dock = DockStyle.Top,
+                Height = 28,
+                Font = AppTheme.Caption,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft,
+                Padding = new Padding(14, 0, 0, 4)
+            };
         }
 
         /// Updates the right-hand details panel to match whatever's currently selected in
@@ -665,6 +808,7 @@ namespace PasswordManager
         private void UpdateEntryCountLabel()
         {
             lblEntryCount.Text = accounts.Count == 1 ? "1 entry" : $"{accounts.Count} entries";
+            lblSidebarAllItemsCount.Text = accounts.Count.ToString();
         }
 
         private void TxtSearch_TextChanged(object sender, EventArgs e)
