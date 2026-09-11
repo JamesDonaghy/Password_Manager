@@ -353,48 +353,12 @@ namespace PasswordManager
 
         private void UpdatePasswordStrengthMeter()
         {
-            var (score, label, color) = EvaluatePasswordStrength(txtPassword.Text);
+            var (score, label, color) = PasswordStrength.Evaluate(txtPassword.Text);
 
             pnlStrengthBarFill.Width = (int)(pnlStrengthBarContainer.ClientSize.Width * (score / 100.0));
             pnlStrengthBarFill.BackColor = color;
             lblStrengthText.Text = label;
             lblStrengthText.ForeColor = color;
-        }
-
-        /// <summary>
-        /// Simple, transparent heuristic - not a full entropy-based analysis, just length
-        /// plus character variety. Six criteria total, mapped to a 0-100 score and a tier.
-        /// </summary>
-        private static (int score, string label, System.Drawing.Color color) EvaluatePasswordStrength(string password)
-        {
-            if (string.IsNullOrEmpty(password))
-            {
-                return (0, "", System.Drawing.Color.Gray);
-            }
-
-            int criteriaMet = 0;
-            if (password.Length >= 8) criteriaMet++;
-            if (password.Length >= 12) criteriaMet++;
-            if (password.Any(char.IsLower)) criteriaMet++;
-            if (password.Any(char.IsUpper)) criteriaMet++;
-            if (password.Any(char.IsDigit)) criteriaMet++;
-            if (password.Any(c => !char.IsLetterOrDigit(c))) criteriaMet++;
-
-            int score = (int)(criteriaMet / 6.0 * 100);
-
-            if (criteriaMet <= 2)
-            {
-                return (score, "Weak", System.Drawing.Color.IndianRed);
-            }
-            if (criteriaMet <= 4)
-            {
-                return (score, "Fair", System.Drawing.Color.Orange);
-            }
-            if (criteriaMet == 5)
-            {
-                return (score, "Good", System.Drawing.Color.Goldenrod);
-            }
-            return (score, "Strong", System.Drawing.Color.SeaGreen);
         }
 
         private void TxtRepeatPassword_TextChanged(object sender, EventArgs e)

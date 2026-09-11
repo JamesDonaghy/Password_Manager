@@ -24,6 +24,9 @@ namespace PasswordManager
         private Label lblDetailsUsername;
         private Label lblDetailsPassword;
         private Button btnDetailsTogglePassword;
+        private Panel pnlDetailsStrengthBarContainer;
+        private Panel pnlDetailsStrengthBarFill;
+        private Label lblDetailsStrengthText;
         private Label lblDetailsUrl;
         private TextBox txtDetailsNotes;
         private Label lblDetailsCreated;
@@ -389,6 +392,25 @@ namespace PasswordManager
             };
             var passwordGroup = DialogControls.CreateFieldGroup("PASSWORD", DialogControls.CreateBorderedFieldRow(lblDetailsPassword, btnDetailsTogglePassword, btnDetailsCopyPassword), 34);
 
+            // Strength meter for the saved password - same PasswordStrength heuristic
+            // AddEntryForm's own meter uses (extracted so both agree), just laid out as one
+            // row (caption, bar, tier label) instead of AddEntryForm's caption-above style,
+            // matching the reference design's compact "Strength [====----] Strong" row.
+            var lblStrengthCaption = new Label { Text = "Strength", Dock = DockStyle.Left, Width = 64, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            lblDetailsStrengthText = new Label { Dock = DockStyle.Right, Width = 56, Font = AppTheme.Base, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
+            pnlDetailsStrengthBarFill = new Panel { Location = new System.Drawing.Point(0, 0) };
+            pnlDetailsStrengthBarContainer = new Panel { Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle };
+            pnlDetailsStrengthBarContainer.Controls.Add(pnlDetailsStrengthBarFill);
+            // Padding centres the (fixed-height, via Dock=Fill inside it) bar container
+            // vertically within the row rather than letting it stretch to the full row
+            // height.
+            var strengthBarWrapper = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 8, 0, 8), BackColor = AppTheme.PanelBackground };
+            strengthBarWrapper.Controls.Add(pnlDetailsStrengthBarContainer);
+            var strengthRow = new Panel { Dock = DockStyle.Top, Height = 30, BackColor = AppTheme.PanelBackground };
+            strengthRow.Controls.Add(strengthBarWrapper);
+            strengthRow.Controls.Add(lblStrengthCaption);
+            strengthRow.Controls.Add(lblDetailsStrengthText);
+
             lblDetailsUrl = new Label { AutoSize = false, AutoEllipsis = true, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
             var btnDetailsOpenUrl = DialogControls.CreateInlineActionButton("Open", 56, 26);
             btnDetailsOpenUrl.Click += (sender, e) => OpenSelectedAccountUrl();
@@ -433,6 +455,7 @@ namespace PasswordManager
             detailsScroll.Controls.Add(metadataRow);
             detailsScroll.Controls.Add(notesGroup);
             detailsScroll.Controls.Add(urlGroup);
+            detailsScroll.Controls.Add(strengthRow);
             detailsScroll.Controls.Add(passwordGroup);
             detailsScroll.Controls.Add(usernameGroup);
             detailsScroll.Controls.Add(headerRow);
@@ -750,10 +773,22 @@ namespace PasswordManager
             lblDetailsUsername.Text = selectedAccount.Username;
             lblDetailsPassword.Text = isRevealed ? selectedAccount.Password : "••••••••";
             btnDetailsTogglePassword.Text = isRevealed ? "Hide" : "Show";
+            UpdateDetailsStrengthMeter(selectedAccount.Password); // Strength reflects the real password regardless of whether it's currently shown or masked
             lblDetailsUrl.Text = string.IsNullOrEmpty(selectedAccount.Url) ? "-" : selectedAccount.Url;
             txtDetailsNotes.Text = selectedAccount.Notes;
             lblDetailsCreated.Text = selectedAccount.CreatedAt is DateTime created ? created.ToString("g") : "-";
             lblDetailsModified.Text = selectedAccount.ModifiedAt is DateTime modified ? modified.ToString("g") : "-";
+        }
+
+        private void UpdateDetailsStrengthMeter(string password)
+        {
+            var (score, label, color) = PasswordStrength.Evaluate(password);
+
+            pnlDetailsStrengthBarFill.Height = pnlDetailsStrengthBarContainer.ClientSize.Height;
+            pnlDetailsStrengthBarFill.Width = (int)(pnlDetailsStrengthBarContainer.ClientSize.Width * (score / 100.0));
+            pnlDetailsStrengthBarFill.BackColor = color;
+            lblDetailsStrengthText.Text = label;
+            lblDetailsStrengthText.ForeColor = color;
         }
 
         /// Opens the selected entry's URL in the system's default browser - used by both
