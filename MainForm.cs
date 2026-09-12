@@ -15,6 +15,10 @@ namespace PasswordManager
         private Label lblSidebarAllItemsCount;
         private Panel leftNavPanel;
         private Panel selectedNavRow; // Whichever sidebar nav row (All Items/Favorites/Security/Settings) is currently highlighted - see CreateNavRow/SelectNavRow
+        private Panel allItemsNavRow; // Reselected whenever we navigate back to the vault view - see ShowVaultView
+        private Panel middlePanel;
+        private Panel securityMiddlePanel;
+        private Panel securityRightPanel;
         private Panel rightDetailsPanel;
         private Label rightDetailsPlaceholder;
         private Panel detailsContentPanel;
@@ -242,12 +246,12 @@ namespace PasswordManager
             // meant clicking them only ever showed the default focus-rectangle outline and
             // never picked up the highlight, and "All Items" could never lose it).
             this.lblSidebarAllItemsCount = new Label { Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight, Padding = new Padding(0, 0, 14, 0) };
-            var allItemsRow = CreateNavRow("🗂️ All Items", this.lblSidebarAllItemsCount);
-            var btnFavorites = CreateNavRow("⭐ Favorites", null); // Not wired to a real view yet - no Favourites feature to back it (see ServiceBadge/AccountGridPresenter's own placeholder star)
-            var btnSecurity = CreateNavRow("🛡️ Security", null); // Placeholder - no security dashboard yet
-            var btnSettingsNav = CreateNavRow("⚙️ Settings", null); // Placeholder - Change Master Password/Backup/Restore are reached via the top Settings menu for now (see below)
+            this.allItemsNavRow = CreateNavRow("🗂️ All Items", this.lblSidebarAllItemsCount, ShowVaultView);
+            var btnFavorites = CreateNavRow("⭐ Favorites", null, ShowVaultView); // Not wired to a real view yet - no Favourites feature to back it (see ServiceBadge/AccountGridPresenter's own placeholder star). Still returns to the vault view if clicked while on the Security page, so the sidebar never shows a highlighted item whose view isn't actually on screen.
+            var btnSecurity = CreateNavRow("🛡️ Security", null, ShowSecurityView);
+            var btnSettingsNav = CreateNavRow("⚙️ Settings", null, ShowVaultView); // Placeholder - Change Master Password/Backup/Restore are reached via the top Settings menu or the new Security page for now (see below)
 
-            SelectNavRow(allItemsRow); // "All Items" is the view shown on load, so it starts out highlighted
+            SelectNavRow(this.allItemsNavRow); // "All Items" is the view shown on load, so it starts out highlighted
 
             var btnLock = CreateNavButton("🔒 Lock Vault", Lock_Click);
             btnLock.Dock = DockStyle.Bottom; // Pinned to the very bottom regardless of how much is stacked above it, unlike every other nav item here
@@ -266,7 +270,7 @@ namespace PasswordManager
             this.leftNavPanel.Controls.Add(sectionDividerLine);
             this.leftNavPanel.Controls.Add(sectionDividerSpacer);
             this.leftNavPanel.Controls.Add(btnFavorites);
-            this.leftNavPanel.Controls.Add(allItemsRow);
+            this.leftNavPanel.Controls.Add(this.allItemsNavRow);
             this.leftNavPanel.Controls.Add(CreateSidebarSectionLabel("VAULT"));
 
             this.leftNavPanel.Controls.Add(btnLock);
@@ -277,6 +281,7 @@ namespace PasswordManager
             // the whole window. Same fill/search/sort/reveal/copy behavior as before; only
             // the search box's own appearance and the spacing around it are new here.
             var middlePanel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background, Padding = new Padding(16, 14, 16, 0) };
+            this.middlePanel = middlePanel;
             middlePanel.Controls.Add(this.dgvAccounts);
             middlePanel.Controls.Add(searchSpacer);
             middlePanel.Controls.Add(searchBorder);
@@ -489,6 +494,10 @@ namespace PasswordManager
             // preserve selection - a known rough edge for a later pass).
             this.dgvAccounts.SelectionChanged += (sender, e) => RefreshDetailsPanel();
 
+            BuildSecurityPage(out this.securityMiddlePanel, out this.securityRightPanel);
+            this.securityMiddlePanel.Visible = false;
+            this.securityRightPanel.Visible = false;
+
             var mainLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -502,6 +511,12 @@ namespace PasswordManager
             mainLayout.Controls.Add(this.leftNavPanel, 0, 0);
             mainLayout.Controls.Add(middlePanel, 1, 0);
             mainLayout.Controls.Add(this.rightDetailsPanel, 2, 0);
+            // Security page panels share the same two cells as the vault's middle/right
+            // panels - only one of each pair is ever Visible at a time (see ShowVaultView/
+            // ShowSecurityView), the same overlapping-panel technique already used for
+            // rightDetailsPlaceholder vs. detailsContentPanel above.
+            mainLayout.Controls.Add(this.securityMiddlePanel, 1, 0);
+            mainLayout.Controls.Add(this.securityRightPanel, 2, 0);
 
             this.Controls.Add(mainLayout);
             this.Controls.Add(this.menuStrip);
@@ -652,10 +667,13 @@ namespace PasswordManager
         /// Builds one selectable left-nav row: a text label plus a left accent bar that's
         /// only shown while the row is selected, both wrapped in a Panel so the whole row
         /// highlights (and clicks) as a single unit. An optional trailing label (currently
-        /// just the "All Items" entry count) docks to the right. This is what gives every
-        /// sidebar entry the same purple-highlight look "All Items" used to have alone -
-        /// see SelectNavRow for how the highlight actually moves between rows on click.
-        private Panel CreateNavRow(string text, Label trailingLabel)
+        /// just the "All Items" entry count) docks to the right, and an optional onSelected
+        /// callback fires after the row is highlighted - used by All Items/Security to also
+        /// switch which view (vault vs. security) is showing; Favorites/Settings still pass
+        /// null since there's no view behind them yet. This is what gives every sidebar
+        /// entry the same purple-highlight look "All Items" used to have alone - see
+        /// SelectNavRow for how the highlight actually moves between rows on click.
+        private Panel CreateNavRow(string text, Label trailingLabel, Action onSelected = null)
         {
             var accentBar = new Panel { Dock = DockStyle.Left, Width = 3, BackColor = AppTheme.Accent, Visible = false };
             var label = new Label
@@ -687,7 +705,7 @@ namespace PasswordManager
             // The label docks over the entire row, so in practice it's what receives mouse
             // clicks/hovers, not the row panel underneath it - both are wired to the same
             // handlers so the row behaves the same no matter where on it the pointer is.
-            EventHandler select = (s, e) => SelectNavRow(row);
+            EventHandler select = (s, e) => { SelectNavRow(row); onSelected?.Invoke(); };
             row.Click += select;
             label.Click += select;
 
@@ -730,6 +748,194 @@ namespace PasswordManager
             }
 
             selectedNavRow = row;
+        }
+
+        /// Switches the middle/right columns back to the normal vault view (grid + entry
+        /// details), hiding the Security page's panels. Also re-highlights "All Items",
+        /// since it's the only sidebar row that actually corresponds to this view.
+        private void ShowVaultView()
+        {
+            securityMiddlePanel.Visible = false;
+            securityRightPanel.Visible = false;
+            middlePanel.Visible = true;
+            rightDetailsPanel.Visible = true;
+            SelectNavRow(allItemsNavRow);
+        }
+
+        /// Switches the middle/right columns to the Security page, hiding the vault's grid
+        /// and entry details panels. The Security nav row is already highlighted by the time
+        /// this runs (CreateNavRow calls SelectNavRow before invoking this).
+        private void ShowSecurityView()
+        {
+            middlePanel.Visible = false;
+            rightDetailsPanel.Visible = false;
+            securityMiddlePanel.Visible = true;
+            securityRightPanel.Visible = true;
+        }
+
+        /// Builds the Security page's middle (heading + Master Password/Auto-Lock cards)
+        /// and right (summary) panels, shown instead of the vault's middle/details panels
+        /// while the Security nav row is selected. Both panels are built once up front and
+        /// just toggled Visible by ShowVaultView/ShowSecurityView - simpler and safer than
+        /// building/tearing them down on every navigation.
+        private void BuildSecurityPage(out Panel securityMiddle, out Panel securityRight)
+        {
+            // --- Middle: heading + cards ---
+            var backArrow = new Label
+            {
+                Text = "←",
+                Dock = DockStyle.Left,
+                Width = 32,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 14f),
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Cursor = Cursors.Hand
+            };
+            backArrow.Click += (sender, e) => ShowVaultView();
+
+            var lblSecurityHeading = new Label
+            {
+                Text = "Security",
+                Dock = DockStyle.Fill,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            var titleRow = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = AppTheme.Background };
+            titleRow.Controls.Add(lblSecurityHeading);
+            titleRow.Controls.Add(backArrow);
+
+            var lblSecuritySubtitle = new Label
+            {
+                Text = "Keep your vault safe and secure",
+                Dock = DockStyle.Top,
+                Height = 24,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                Padding = new Padding(2, 0, 0, 0)
+            };
+            var spacerAfterSubtitle = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.Background };
+
+            // Master Password card: a bordered row that looks/behaves like the other
+            // clickable rows in the app, opening the exact same Change Master Password
+            // dialog as the top Settings menu - no new dialog or logic here.
+            var lblChangeMasterPassword = new Label
+            {
+                Text = "Change Master Password",
+                ForeColor = AppTheme.TextPrimary,
+                Font = AppTheme.Base,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Cursor = Cursors.Hand
+            };
+            var lblChangeMasterPasswordChevron = new Label
+            {
+                Text = "›",
+                Dock = DockStyle.Right,
+                Width = 24,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+            var changeMasterPasswordRow = DialogControls.CreateBorderedFieldRow(lblChangeMasterPassword, lblChangeMasterPasswordChevron);
+            changeMasterPasswordRow.Height = 34;
+            EventHandler openChangeMasterPassword = ChangeMasterPassword_Click; // Same handler as the Settings menu item - not a new dialog
+            lblChangeMasterPassword.Click += openChangeMasterPassword;
+            changeMasterPasswordRow.Click += openChangeMasterPassword;
+
+            var masterPasswordCard = CreateSecurityCard(
+                "Master Password",
+                "Your master password protects your entire vault.",
+                changeMasterPasswordRow);
+
+            // Auto-Lock card: displays the existing fixed auto-lock behaviour (see
+            // AutoLockTimeout/AutoLockTimer_Tick). Not an editable/configurable setting -
+            // that functionality doesn't exist yet, so there's nothing to wire up here
+            // beyond showing the current value.
+            var lblAutoLockValue = new Label
+            {
+                Text = $"Locks after {(int)AutoLockTimeout.TotalMinutes} minutes of inactivity",
+                ForeColor = AppTheme.TextPrimary,
+                Font = AppTheme.Base,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            var autoLockValueRow = DialogControls.CreateBorderedFieldRow(lblAutoLockValue);
+            autoLockValueRow.Height = 34;
+
+            var autoLockCard = CreateSecurityCard(
+                "Auto-Lock",
+                "Automatically locks the vault after a period of inactivity.",
+                autoLockValueRow);
+
+            var securityContent = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 12) };
+            // Dock=Top siblings stack in reverse of add order (last added ends up closest
+            // to the top edge) - same quirk called out throughout this file.
+            securityContent.Controls.Add(autoLockCard);
+            securityContent.Controls.Add(masterPasswordCard);
+            securityContent.Controls.Add(spacerAfterSubtitle);
+            securityContent.Controls.Add(lblSecuritySubtitle);
+            securityContent.Controls.Add(titleRow);
+
+            securityMiddle = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background, Padding = new Padding(16, 14, 16, 0) };
+            securityMiddle.Controls.Add(securityContent);
+
+            // --- Right: summary panel ---
+            var lblRightHeading = new Label { Text = "Security", Dock = DockStyle.Top, Height = 32, Font = AppTheme.Heading, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleCenter };
+            var lblRightSubtitle = new Label { Text = "Your vault, your security", Dock = DockStyle.Top, Height = 24, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.TopCenter };
+            var rightDividerSpacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.PanelBackground };
+            var rightDividerLine = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = AppTheme.Border };
+            var rightDividerSpacerAfter = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.PanelBackground };
+
+            // Only the two things actually covered by this update get a checklist line -
+            // deliberately not claiming coverage (e.g. "regular security checks") for
+            // anything that isn't real yet.
+            Panel CreateChecklistItem(string text)
+            {
+                var check = new Label { Text = "✓", Dock = DockStyle.Left, Width = 24, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10f, System.Drawing.FontStyle.Bold), ForeColor = System.Drawing.Color.SeaGreen, TextAlign = System.Drawing.ContentAlignment.MiddleCenter };
+                var label = new Label { Text = text, Dock = DockStyle.Fill, Font = AppTheme.Base, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+                var itemRow = new Panel { Dock = DockStyle.Top, Height = 30, BackColor = AppTheme.PanelBackground };
+                itemRow.Controls.Add(label);
+                itemRow.Controls.Add(check);
+                return itemRow;
+            }
+
+            var checklistItem2 = CreateChecklistItem("Auto-lock for extra safety");
+            var checklistItem1 = CreateChecklistItem("Master password protection");
+
+            securityRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 20, 16, 20) };
+            securityRight.Controls.Add(checklistItem2);
+            securityRight.Controls.Add(checklistItem1);
+            securityRight.Controls.Add(rightDividerSpacerAfter);
+            securityRight.Controls.Add(rightDividerLine);
+            securityRight.Controls.Add(rightDividerSpacer);
+            securityRight.Controls.Add(lblRightSubtitle);
+            securityRight.Controls.Add(lblRightHeading);
+        }
+
+        /// Builds one bordered "card" for the Security page: a title/description header
+        /// and an action row underneath (e.g. the Change Master Password row).
+        private static Panel CreateSecurityCard(string title, string description, Control actionRow)
+        {
+            var titleLabel = new Label { Text = title, Dock = DockStyle.Top, Height = 22, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10.5f, System.Drawing.FontStyle.Bold), ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.BottomLeft };
+            var descriptionLabel = new Label { Text = description, Dock = DockStyle.Top, Height = 20, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.TopLeft };
+            var headerRow = new Panel { Dock = DockStyle.Top, Height = 48, BackColor = AppTheme.Surface };
+            headerRow.Controls.Add(descriptionLabel);
+            headerRow.Controls.Add(titleLabel);
+
+            var spacer = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Surface };
+            actionRow.Dock = DockStyle.Top;
+
+            const int cardHeight = 126; // header(48) + spacer(12) + actionRow(34) + inset padding(16+16)
+            var cardInset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(16) };
+            cardInset.Controls.Add(actionRow);
+            cardInset.Controls.Add(spacer);
+            cardInset.Controls.Add(headerRow);
+
+            var cardBorder = new Panel { Dock = DockStyle.Top, Height = cardHeight, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            cardBorder.Controls.Add(cardInset);
+
+            var cardWithMargin = new Panel { Dock = DockStyle.Top, Height = cardHeight + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16) };
+            cardWithMargin.Controls.Add(cardBorder);
+            return cardWithMargin;
         }
 
         /// Small caption-style section header for the sidebar (e.g. "VAULT", "CATEGORIES") -
