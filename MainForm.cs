@@ -40,10 +40,11 @@ namespace PasswordManager
         private BindingList<Account> accounts; // Use BindingList for automatic updates
         private ContextMenuStrip contextMenu;
         private MenuStrip menuStrip;
+        private ToolStripMenuItem copyUsernameMenuItem;
+        private ToolStripMenuItem copyPasswordMenuItem;
+        private ToolStripMenuItem autoTypeMenuItem;
         private ToolStripMenuItem editEntryMenuItem;
         private ToolStripMenuItem deleteEntryMenuItem;
-        private ToolStripMenuItem togglePasswordMenuItem;
-        private ToolStripMenuItem copyPasswordMenuItem;
 
         private AccountGridPresenter gridPresenter;
 
@@ -95,11 +96,23 @@ namespace PasswordManager
 
             this.dgvAccounts = new DataGridView();
             this.contextMenu = new ContextMenuStrip { Renderer = menuRenderer, Font = AppTheme.Base, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary };
+            // Copy actions first (keyboard: Ctrl+X username, Ctrl+C password), then a
+            // divider, then entry management. Show/Hide Password lives only on the details
+            // panel now - keeping it out of the context menu reduces clutter.
+            // ShortcutKeyDisplayString shows the hint right-aligned; actual handling is in
+            // ProcessCmdKey (ShortcutKeys is left unset so it doesn't fight that path).
+            this.copyUsernameMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Copy Username", null, CopyUsername_Click);
+            this.copyUsernameMenuItem.ShortcutKeyDisplayString = "Ctrl+X";
+            this.copyPasswordMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Copy Password", null, CopyPassword_Click);
+            this.copyPasswordMenuItem.ShortcutKeyDisplayString = "Ctrl+C";
+            // KeePass-style auto-type: username + Tab + password into the focused window
+            // (usually a browser login form). Placed directly under Copy Password.
+            this.autoTypeMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Perform Auto-Type", null, AutoType_Click);
+            this.autoTypeMenuItem.ShortcutKeyDisplayString = "Ctrl+V";
+            this.contextMenu.Items.Add(new ToolStripSeparator());
             this.contextMenu.Items.Add("Add Entry", null, AddEntry_Click);
             this.editEntryMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Edit Entry", null, EditEntry_Click);
             this.deleteEntryMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Delete Entry", null, DeleteEntry_Click);
-            this.togglePasswordMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Show Password", null, TogglePasswordVisibility_Click);
-            this.copyPasswordMenuItem = (ToolStripMenuItem)this.contextMenu.Items.Add("Copy Password", null, CopyPassword_Click);
             this.contextMenu.Opening += ContextMenu_Opening; // Enable/disable menu items based on whether a row is selected
             this.dgvAccounts.ContextMenuStrip = this.contextMenu;
 
@@ -199,7 +212,7 @@ namespace PasswordManager
             // Owns filtering and the card-style row painting (icon badge, service name,
             // username) - see AccountGridPresenter. Password is no longer shown in the list
             // at all, so it no longer needs passwordRevealTracker; that's only relevant to
-            // the details panel now (see RefreshDetailsPanel/TogglePasswordVisibility_Click).
+            // the details panel now (see RefreshDetailsPanel).
             this.gridPresenter = new AccountGridPresenter(this.dgvAccounts);
 
             // If a copied password is still sitting on the clipboard when the app closes,
@@ -1370,24 +1383,21 @@ namespace PasswordManager
             var selectedAccount = dgvAccounts.CurrentRow?.DataBoundItem as Account;
             bool hasSelection = selectedAccount != null;
 
+            copyUsernameMenuItem.Enabled = hasSelection;
+            copyPasswordMenuItem.Enabled = hasSelection;
+            autoTypeMenuItem.Enabled = hasSelection;
             editEntryMenuItem.Enabled = hasSelection;
             deleteEntryMenuItem.Enabled = hasSelection;
-            togglePasswordMenuItem.Enabled = hasSelection;
-            copyPasswordMenuItem.Enabled = hasSelection;
-            togglePasswordMenuItem.Text = hasSelection && passwordRevealTracker.IsRevealed(selectedAccount)
-                ? "Hide Password"
-                : "Show Password";
         }
 
-        private void TogglePasswordVisibility_Click(object sender, EventArgs e)
+        private void CopyUsername_Click(object sender, EventArgs e)
         {
             if (!(dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount))
             {
                 return;
             }
 
-            passwordRevealTracker.Toggle(selectedAccount);
-            dgvAccounts.InvalidateRow(dgvAccounts.CurrentRow.Index); // Force this row's cells to re-format
+            clipboardGuard.CopyAndAutoClear(selectedAccount.Username);
         }
 
         private void CopyPassword_Click(object sender, EventArgs e)
@@ -1398,6 +1408,73 @@ namespace PasswordManager
             }
 
             clipboardGuard.CopyAndAutoClear(selectedAccount.Password);
+        }
+
+        /// <summary>
+        /// KeePass-style auto-type: types Username, Tab, Password into whichever window
+        /// currently has focus (e.g. a browser login form). Minimizes this form briefly
+        /// so the previously active window is restored, then waits a short moment for
+        /// focus to settle before sending keystrokes.
+        /// </summary>
+        private void AutoType_Click(object sender, EventArgs e)
+        {
+            if (!(dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount))
+            {
+                return;
+            }
+
+            PerformAutoType(selectedAccount);
+        }
+
+        private void PerformAutoType(Account account)
+        {
+            // Capture credentials on the UI thread before any delay/background work.
+            string username = account.Username ?? string.Empty;
+            string password = account.Password ?? string.Empty;
+
+            // Minimize so the window that was behind us (browser, etc.) becomes active.
+            // Leave minimized so focus stays on the target window after typing finishes;
+            // the user can restore the vault from the taskbar when ready.
+            this.WindowState = FormWindowState.Minimized;
+
+            // Type on a background thread so the UI stays responsive during the delay
+            // and keystroke simulation. SendInput itself is fine from a non-UI thread.
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                // Give Windows a moment to switch focus to the previous foreground window.
+                AutoTypeHelper.DelayBeforeTyping(450);
+
+                // Default sequence matches KeePass's common login form pattern
+                // (username → Tab → password). Enter is not sent so the user can
+                // review the filled fields before submitting.
+                AutoTypeHelper.TypeCredentials(username, password, pressEnter: false);
+            });
+        }
+
+        /// Ctrl+X copies the selected entry's username; Ctrl+C copies its password;
+        /// Ctrl+V performs auto-type. Only when the vault grid has focus.
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (dgvAccounts.Focused && dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount)
+            {
+                if (keyData == (Keys.Control | Keys.X))
+                {
+                    clipboardGuard.CopyAndAutoClear(selectedAccount.Username);
+                    return true;
+                }
+                if (keyData == (Keys.Control | Keys.C))
+                {
+                    clipboardGuard.CopyAndAutoClear(selectedAccount.Password);
+                    return true;
+                }
+                if (keyData == (Keys.Control | Keys.V))
+                {
+                    PerformAutoType(selectedAccount);
+                    return true;
+                }
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         private void AutoLockTimer_Tick(object sender, EventArgs e)
