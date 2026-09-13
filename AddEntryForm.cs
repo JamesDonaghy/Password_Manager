@@ -233,6 +233,33 @@ namespace PasswordManager
             var urlGroup = CreateFieldGroup("URL", txtUrl, inputHeight);
             var notesGroup = CreateFieldGroup("Notes", txtNotes, 64);
 
+            // Explicit tab order: Service → Username → Password → Repeat → URL → Notes.
+            // Without this, TabIndex follows Controls.Add order (notes added first), so
+            // focus opens on Notes and Tab never walks the fields top-to-bottom.
+            serviceGroup.TabIndex = 0;
+            usernameGroup.TabIndex = 1;
+            passwordGroup.TabIndex = 2;
+            strengthPanel.TabIndex = 3;
+            lengthPanel.TabIndex = 4;
+            repeatGroup.TabIndex = 5;
+            urlGroup.TabIndex = 6;
+            notesGroup.TabIndex = 7;
+            txtService.TabIndex = 0;
+            txtUsername.TabIndex = 0;
+            txtPassword.TabIndex = 0;
+            txtRepeatPassword.TabIndex = 0;
+            txtUrl.TabIndex = 0;
+            txtNotes.TabIndex = 0;
+            // Icon/action buttons sit in the same rows as the fields - skip them on Tab
+            // so Tab moves field-to-field instead of stopping on every toolbar icon.
+            btnManageUsernames.TabStop = false;
+            btnGeneratePassword.TabStop = false;
+            btnTogglePasswordVisibility.TabStop = false;
+            btnToggleSymbols.TabStop = false;
+            btnToggleNumbers.TabStop = false;
+            btnToggleLengthSlider.TabStop = false;
+            sliderPasswordLength.TabStop = false;
+
             var lblFormTitle = new Label
             {
                 Text = "Add Entry",
@@ -276,8 +303,9 @@ namespace PasswordManager
 
             Text = "Add Entry";
 
-            // Set the Load event handler
-            this.Load += AddEntryForm_Load;
+            // Shown is more reliable than Load for initial focus (Load can be overridden by
+            // the default first-TabIndex control after the form becomes visible).
+            this.Shown += AddEntryForm_Shown;
 
             // If editing an existing account, pre-fill the form and switch to edit mode.
             // Setting txtPassword.Text here also triggers TxtPassword_TextChanged, which
@@ -296,9 +324,11 @@ namespace PasswordManager
             }
         }
 
-        private void AddEntryForm_Load(object sender, EventArgs e)
+        private void AddEntryForm_Shown(object sender, EventArgs e)
         {
-            txtService.Focus(); // Set focus to the Service Name text field
+            // Cursor ready in Service Name so the user can start typing immediately.
+            ActiveControl = txtService;
+            txtService.Focus();
         }
 
         private void BtnGeneratePassword_Click(object sender, EventArgs e)

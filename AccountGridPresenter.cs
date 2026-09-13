@@ -118,22 +118,22 @@ namespace PasswordManager
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
             // Service-initial badge, standing in for a real per-service icon.
-            const int badgeSize = 36;
+            const int badgeSize = 30;
             var badgeRect = new Rectangle(
-                e.CellBounds.Left + 14,
+                e.CellBounds.Left + 12,
                 e.CellBounds.Top + (e.CellBounds.Height - badgeSize) / 2,
                 badgeSize,
                 badgeSize);
 
             Color badgeColor = ServiceBadge.ColorFor(account.Service);
             using (var badgeBrush = new SolidBrush(badgeColor))
-            using (var badgePath = ServiceBadge.RoundedRect(badgeRect, 8))
+            using (var badgePath = ServiceBadge.RoundedRect(badgeRect, 7))
             {
                 e.Graphics.FillPath(badgeBrush, badgePath);
             }
 
             string initial = ServiceBadge.InitialFor(account.Service);
-            using (var badgeFont = new Font(AppTheme.Base.FontFamily, 13f, FontStyle.Bold))
+            using (var badgeFont = new Font(AppTheme.Base.FontFamily, 11f, FontStyle.Bold))
             {
                 TextRenderer.DrawText(e.Graphics, initial, badgeFont, badgeRect, Color.White,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
@@ -141,11 +141,11 @@ namespace PasswordManager
 
             // Service name (top line) and username (bottom line), each ellipsised
             // independently rather than manually measured - TextRenderer handles that.
-            int textLeft = badgeRect.Right + 12;
+            int textLeft = badgeRect.Right + 10;
             int textRight = e.CellBounds.Right - 56; // Leaves room for the star/chevron on the right
             int textWidth = Math.Max(0, textRight - textLeft);
-            int lineHeight = (e.CellBounds.Height - 8) / 2;
-            var serviceRect = new Rectangle(textLeft, e.CellBounds.Top + 4, textWidth, lineHeight);
+            int lineHeight = (e.CellBounds.Height - 6) / 2;
+            var serviceRect = new Rectangle(textLeft, e.CellBounds.Top + 3, textWidth, lineHeight);
             var usernameRect = new Rectangle(textLeft, serviceRect.Bottom, textWidth, lineHeight);
 
             string serviceText = string.IsNullOrEmpty(account.Service) ? "(no service name)" : account.Service;

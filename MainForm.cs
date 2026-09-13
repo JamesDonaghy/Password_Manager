@@ -601,7 +601,7 @@ namespace PasswordManager
             dgvAccounts.BackgroundColor = AppTheme.Background;
             dgvAccounts.BorderStyle = BorderStyle.None;
             dgvAccounts.CellBorderStyle = DataGridViewCellBorderStyle.None; // Rows draw their own divider instead (see AccountGridPresenter)
-            dgvAccounts.RowTemplate.Height = 68; // Tall enough for the icon badge plus two stacked text lines
+            dgvAccounts.RowTemplate.Height = 52; // Compact row: badge + two stacked text lines without excess vertical padding
 
             // Full-row highlighting instead of the default single-cell selection reads as far
             // more "list of entries, pick one" - closer to the reference apps - and the row
@@ -626,6 +626,7 @@ namespace PasswordManager
             // those wouldn't be validated or reflected back into the Account objects anyway.
             dgvAccounts.AllowUserToAddRows = false;
             dgvAccounts.AllowUserToDeleteRows = false;
+            dgvAccounts.AllowUserToResizeRows = false; // Fixed row height - dragging to resize entries is not supported
             dgvAccounts.ReadOnly = true;
         }
 
@@ -859,13 +860,29 @@ namespace PasswordManager
                 Width = 24,
                 Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
                 ForeColor = AppTheme.TextSecondary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                Cursor = Cursors.Hand
             };
             var changeMasterPasswordRow = DialogControls.CreateBorderedFieldRow(lblChangeMasterPassword, lblChangeMasterPasswordChevron);
             changeMasterPasswordRow.Height = 34;
             EventHandler openChangeMasterPassword = ChangeMasterPassword_Click; // Same handler as the Settings menu item - not a new dialog
             lblChangeMasterPassword.Click += openChangeMasterPassword;
+            lblChangeMasterPasswordChevron.Click += openChangeMasterPassword;
             changeMasterPasswordRow.Click += openChangeMasterPassword;
+
+            // Same purple hover tint used by sidebar nav rows. The bordered field's
+            // surface is the inset child panel (BackColor = Surface).
+            var changeMasterPasswordInset = changeMasterPasswordRow.Controls[0];
+            EventHandler changeMasterHoverOn = (s, e) => changeMasterPasswordInset.BackColor = AppTheme.AccentSubtle;
+            EventHandler changeMasterHoverOff = (s, e) => changeMasterPasswordInset.BackColor = AppTheme.Surface;
+            changeMasterPasswordRow.MouseEnter += changeMasterHoverOn;
+            changeMasterPasswordRow.MouseLeave += changeMasterHoverOff;
+            changeMasterPasswordInset.MouseEnter += changeMasterHoverOn;
+            changeMasterPasswordInset.MouseLeave += changeMasterHoverOff;
+            lblChangeMasterPassword.MouseEnter += changeMasterHoverOn;
+            lblChangeMasterPassword.MouseLeave += changeMasterHoverOff;
+            lblChangeMasterPasswordChevron.MouseEnter += changeMasterHoverOn;
+            lblChangeMasterPasswordChevron.MouseLeave += changeMasterHoverOff;
 
             var masterPasswordCard = CreateSecurityCard(
                 "Master Password",
@@ -1057,7 +1074,7 @@ namespace PasswordManager
             textStack.Controls.Add(descriptionLabel);
             textStack.Controls.Add(titleLabel);
 
-            var chevron = new Label { Text = "›", Dock = DockStyle.Right, Width = 24, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f), ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleCenter };
+            var chevron = new Label { Text = "›", Dock = DockStyle.Right, Width = 24, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f), ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Cursor = Cursors.Hand };
 
             var row = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = AppTheme.Surface, Padding = new Padding(16, 10, 16, 10), Cursor = Cursors.Hand };
             row.Controls.Add(textStack);
@@ -1069,6 +1086,29 @@ namespace PasswordManager
             textStack.Click += onClick;
             titleLabel.Click += onClick;
             descriptionLabel.Click += onClick;
+            chevron.Click += onClick;
+
+            // Same purple hover tint used by sidebar nav rows (CreateNavRow / CreateNavButton).
+            EventHandler hoverOn = (s, e) =>
+            {
+                row.BackColor = AppTheme.AccentSubtle;
+                textStack.BackColor = AppTheme.AccentSubtle;
+            };
+            EventHandler hoverOff = (s, e) =>
+            {
+                row.BackColor = AppTheme.Surface;
+                textStack.BackColor = AppTheme.Surface;
+            };
+            row.MouseEnter += hoverOn;
+            row.MouseLeave += hoverOff;
+            textStack.MouseEnter += hoverOn;
+            textStack.MouseLeave += hoverOff;
+            titleLabel.MouseEnter += hoverOn;
+            titleLabel.MouseLeave += hoverOff;
+            descriptionLabel.MouseEnter += hoverOn;
+            descriptionLabel.MouseLeave += hoverOff;
+            chevron.MouseEnter += hoverOn;
+            chevron.MouseLeave += hoverOff;
 
             return row;
         }
