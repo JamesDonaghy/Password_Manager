@@ -23,11 +23,17 @@ namespace PasswordManager
         private readonly DataGridView grid;
         private IEnumerable<Account> lastAccounts = Enumerable.Empty<Account>();
         private string lastSearchText = string.Empty;
+        private bool lastFavoritesOnly;
 
         // Which row the mouse is currently over, for the hover highlight - DataGridView
         // has no built-in concept of row hover, so this is tracked manually and the
         // affected rows are invalidated (repainted) on change.
         private int hoveredRowIndex = -1;
+
+        /// Raised when the user clicks the favourite star on a row. The account's
+        /// IsFavorite flag has already been toggled; the subscriber should persist and
+        /// refresh (e.g. via BindingList.ResetItem).
+        public event Action<Account> FavoriteToggled;
 
         public AccountGridPresenter(DataGridView grid)
         {
@@ -52,27 +58,37 @@ namespace PasswordManager
             grid.CellPainting += Grid_CellPainting;
             grid.CellMouseMove += Grid_CellMouseMove;
             grid.MouseLeave += Grid_MouseLeave;
+            grid.CellMouseClick += Grid_CellMouseClick;
         }
 
         /// Rebuilds the list's contents from the given accounts and search text. Call this
         /// whenever the account list changes or the search text changes.
-        public void Refresh(IEnumerable<Account> accounts, string searchText)
+        public void Refresh(IEnumerable<Account> accounts, string searchText, bool favoritesOnly = false)
         {
             lastAccounts = accounts ?? Enumerable.Empty<Account>();
             lastSearchText = searchText ?? string.Empty;
+            lastFavoritesOnly = favoritesOnly;
 
             RefreshInternal();
         }
 
         private void RefreshInternal()
         {
+            // Keep the same entry selected across rebinds (e.g. after toggling a favourite).
+            // DataSource replacement otherwise jumps selection back to the first row.
+            Account previouslySelected = grid.CurrentRow?.DataBoundItem as Account;
+
             string filterText = lastSearchText.Trim();
+
+            IEnumerable<Account> source = lastFavoritesOnly
+                ? lastAccounts.Where(a => a.IsFavorite)
+                : lastAccounts;
 
             // Deliberately not searching Password - matching against plaintext passwords in
             // a search box isn't something a password manager should be doing, even locally.
             IEnumerable<Account> filtered = string.IsNullOrEmpty(filterText)
-                ? lastAccounts
-                : lastAccounts.Where(a =>
+                ? source
+                : source.Where(a =>
                     Contains(a.Service, filterText) ||
                     Contains(a.Username, filterText) ||
                     Contains(a.Url, filterText) ||
@@ -90,6 +106,19 @@ namespace PasswordManager
                 {
                     row.DefaultCellStyle.BackColor = StaleEntryPolicy.HighlightColor;
                     row.Cells[0].ToolTipText = StaleEntryPolicy.ExplanationText;
+                }
+            }
+
+            if (previouslySelected != null)
+            {
+                foreach (DataGridViewRow row in grid.Rows)
+                {
+                    if (ReferenceEquals(row.DataBoundItem, previouslySelected))
+                    {
+                        row.Selected = true;
+                        grid.CurrentCell = row.Cells[0];
+                        break;
+                    }
                 }
             }
         }
@@ -158,14 +187,13 @@ namespace PasswordManager
 
             TextRenderer.DrawText(e.Graphics, account.Username ?? string.Empty, AppTheme.Base, usernameRect, AppTheme.TextSecondary, textFlags);
 
-            // Favourite star and a trailing chevron, matching the reference design's list-
-            // item structure. Both are purely decorative for now - there's no Favourites
-            // feature yet to back the star (a later stage, once the core list layout and
-            // details panel are both settled).
+            // Favourite star (filled yellow when favourited) and a trailing chevron.
             using (var glyphFont = new Font(AppTheme.Base.FontFamily, 12f))
             {
                 var starRect = new Rectangle(e.CellBounds.Right - 52, e.CellBounds.Top, 24, e.CellBounds.Height);
-                TextRenderer.DrawText(e.Graphics, "☆", glyphFont, starRect, AppTheme.Border,
+                string starGlyph = account.IsFavorite ? "★" : "☆";
+                Color starColor = account.IsFavorite ? Color.FromArgb(0xF5, 0xC5, 0x18) : AppTheme.Border;
+                TextRenderer.DrawText(e.Graphics, starGlyph, glyphFont, starRect, starColor,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
 
                 var chevronRect = new Rectangle(e.CellBounds.Right - 26, e.CellBounds.Top, 20, e.CellBounds.Height);
@@ -214,6 +242,38 @@ namespace PasswordManager
             int previousHoveredRow = hoveredRowIndex;
             hoveredRowIndex = -1;
             grid.InvalidateRow(previousHoveredRow);
+        }
+
+        private void Grid_CellMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left || e.RowIndex < 0 || e.ColumnIndex < 0)
+            {
+                return;
+            }
+
+            if (!(grid.Rows[e.RowIndex].DataBoundItem is Account account))
+            {
+                return;
+            }
+
+            // e.X is relative to the cell. Star occupies the strip matching paint: Right-52 .. Right-28.
+            int cellWidth = grid.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false).Width;
+            int starLeft = cellWidth - 52;
+            int starRight = cellWidth - 28;
+            if (e.X < starLeft || e.X > starRight)
+            {
+                return;
+            }
+
+            // Select this row before the refresh path runs so rebind can restore the same entry
+            // instead of jumping back to the first row.
+            grid.ClearSelection();
+            grid.Rows[e.RowIndex].Selected = true;
+            grid.CurrentCell = grid.Rows[e.RowIndex].Cells[0];
+
+            account.IsFavorite = !account.IsFavorite;
+            grid.InvalidateRow(e.RowIndex);
+            FavoriteToggled?.Invoke(account);
         }
 
         private static bool Contains(string value, string searchText)

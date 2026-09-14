@@ -16,6 +16,7 @@ namespace PasswordManager
         private Panel leftNavPanel;
         private Panel selectedNavRow; // Whichever sidebar nav row (All Items/Favorites/Security/Settings) is currently highlighted - see CreateNavRow/SelectNavRow
         private Panel allItemsNavRow; // Reselected whenever we navigate back to the vault view - see ShowVaultView
+        private bool showFavoritesOnly; // When true, the grid only shows favourited entries
         private Panel middlePanel;
         private Panel securityMiddlePanel;
         private Panel securityRightPanel;
@@ -214,6 +215,7 @@ namespace PasswordManager
             // at all, so it no longer needs passwordRevealTracker; that's only relevant to
             // the details panel now (see RefreshDetailsPanel).
             this.gridPresenter = new AccountGridPresenter(this.dgvAccounts);
+            this.gridPresenter.FavoriteToggled += OnFavoriteToggled;
 
             // If a copied password is still sitting on the clipboard when the app closes,
             // the auto-clear timer never gets the chance to fire - clear it here instead.
@@ -261,8 +263,8 @@ namespace PasswordManager
             // meant clicking them only ever showed the default focus-rectangle outline and
             // never picked up the highlight, and "All Items" could never lose it).
             this.lblSidebarAllItemsCount = new Label { Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight, Padding = new Padding(0, 0, 14, 0) };
-            this.allItemsNavRow = CreateNavRow("🗂️ All Items", this.lblSidebarAllItemsCount, ShowVaultView);
-            var btnFavorites = CreateNavRow("⭐ Favorites", null, ShowVaultView); // Not wired to a real view yet - no Favourites feature to back it (see ServiceBadge/AccountGridPresenter's own placeholder star). Still returns to the vault view if clicked while on the Security page, so the sidebar never shows a highlighted item whose view isn't actually on screen.
+            this.allItemsNavRow = CreateNavRow("🗂️ All Items", this.lblSidebarAllItemsCount, ShowAllItemsView);
+            var btnFavorites = CreateNavRow("⭐ Favorites", null, ShowFavoritesView);
             var btnSecurity = CreateNavRow("🛡️ Security", null, ShowSecurityView);
             var btnSettingsNav = CreateNavRow("⚙️ Settings", null, ShowSettingsView);
 
@@ -628,7 +630,7 @@ namespace PasswordManager
             dgvAccounts.DefaultCellStyle.ForeColor = AppTheme.TextPrimary;
             dgvAccounts.DefaultCellStyle.BackColor = AppTheme.Surface; // Explicit rather than relying on WinForms' own default (white) happening to already match Surface
 
-            gridPresenter.Refresh(accounts, txtSearch.Text); // Starts unfiltered since txtSearch is empty
+            gridPresenter.Refresh(accounts, txtSearch.Text, showFavoritesOnly); // Starts unfiltered since txtSearch is empty
             UpdateEntryCountLabel();
 
             // Entries are only ever added/edited through AddEntryForm (via the right-click
@@ -772,10 +774,9 @@ namespace PasswordManager
             selectedNavRow = row;
         }
 
-        /// Switches the middle/right columns back to the normal vault view (grid + entry
-        /// details), hiding the Security/Settings pages' panels. Also re-highlights "All
-        /// Items", since it's the only sidebar row that actually corresponds to this view.
-        private void ShowVaultView()
+        /// Switches the middle/right columns back to the vault view (grid + entry details),
+        /// hiding the Security/Settings pages' panels.
+        private void ShowVaultPanels()
         {
             securityMiddlePanel.Visible = false;
             securityRightPanel.Visible = false;
@@ -783,7 +784,33 @@ namespace PasswordManager
             settingsRightPanel.Visible = false;
             middlePanel.Visible = true;
             rightDetailsPanel.Visible = true;
+        }
+
+        /// Shows all vault entries (clears the favourites-only filter). Nav highlight is
+        /// already set by CreateNavRow before this runs.
+        private void ShowAllItemsView()
+        {
+            showFavoritesOnly = false;
+            ShowVaultPanels();
+            gridPresenter.Refresh(accounts, txtSearch.Text, showFavoritesOnly);
+        }
+
+        /// Shows only favourited entries. Nav highlight is already set by CreateNavRow.
+        private void ShowFavoritesView()
+        {
+            showFavoritesOnly = true;
+            ShowVaultPanels();
+            gridPresenter.Refresh(accounts, txtSearch.Text, showFavoritesOnly);
+        }
+
+        /// Used by Security/Settings back arrows: return to the full vault list and highlight
+        /// "All Items".
+        private void ShowVaultView()
+        {
+            showFavoritesOnly = false;
+            ShowVaultPanels();
             SelectNavRow(allItemsNavRow);
+            gridPresenter.Refresh(accounts, txtSearch.Text, showFavoritesOnly);
         }
 
         /// Switches the middle/right columns to the Security page, hiding the vault's grid
@@ -1267,7 +1294,7 @@ namespace PasswordManager
             // The grid is bound to a filtered copy, not accounts directly (see
             // AccountGridPresenter), so it needs an explicit refresh to pick up the change
             // that just happened.
-            gridPresenter.Refresh(accounts, txtSearch.Text);
+            gridPresenter.Refresh(accounts, txtSearch.Text, showFavoritesOnly);
             UpdateEntryCountLabel();
         }
 
@@ -1282,7 +1309,24 @@ namespace PasswordManager
 
         private void TxtSearch_TextChanged(object sender, EventArgs e)
         {
-            gridPresenter.Refresh(accounts, txtSearch.Text);
+            gridPresenter.Refresh(accounts, txtSearch.Text, showFavoritesOnly);
+        }
+
+        /// Persists a favourite toggle (BindingList does not raise ListChanged for in-place
+        /// property changes) and refreshes the grid so a favourites-only view drops the
+        /// entry when it is unfavourited.
+        private void OnFavoriteToggled(Account account)
+        {
+            int index = accounts.IndexOf(account);
+            if (index >= 0)
+            {
+                accounts.ResetItem(index); // Triggers Accounts_ListChanged -> save + refresh
+            }
+            else
+            {
+                // Fallback if the account is somehow not in the list: still refresh the view.
+                gridPresenter.Refresh(accounts, txtSearch.Text, showFavoritesOnly);
+            }
         }
 
         private void AddEntry_Click(object sender, EventArgs e)

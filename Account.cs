@@ -12,5 +12,8 @@ namespace PasswordManager
         // that's shown as "-" in the grid rather than a misleading default date.
         public System.DateTime? CreatedAt { get; set; }
         public System.DateTime? ModifiedAt { get; set; }
+
+        // Whether the entry is marked as a favourite. Missing on older vaults; defaults to false.
+        public bool IsFavorite { get; set; }
     }
 }
