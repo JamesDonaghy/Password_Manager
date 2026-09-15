@@ -1064,7 +1064,12 @@ namespace PasswordManager
             var cardWithMargin = new Panel { Dock = DockStyle.Top, Height = cardHeight + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16) };
             cardWithMargin.Controls.Add(cardBorder);
 
+            // Appearance card: website icons toggle (defaults on; can be turned off to use letter badges only).
+            var appearanceCard = BuildAppearanceSettingsCard();
+
             var settingsContent = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 12) };
+            // Dock=Top stacks reverse of add order: appearance below vault visually.
+            settingsContent.Controls.Add(appearanceCard);
             settingsContent.Controls.Add(cardWithMargin);
             settingsContent.Controls.Add(spacerAfterSubtitle);
             settingsContent.Controls.Add(lblSettingsSubtitle);
@@ -1101,6 +1106,96 @@ namespace PasswordManager
             var container = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = AppTheme.Surface, Padding = new Padding(16, 0, 16, 0) };
             container.Controls.Add(line);
             return container;
+        }
+
+        /// Appearance settings card with the website-icons toggle.
+        private Panel BuildAppearanceSettingsCard()
+        {
+            var lblTitle = new Label
+            {
+                Text = "Appearance",
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft
+            };
+            var lblDescription = new Label
+            {
+                Text = "How entries look in the vault list and details panel.",
+                Dock = DockStyle.Top,
+                Height = 20,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.TopLeft
+            };
+            var cardHeader = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = AppTheme.Surface, Padding = new Padding(16, 16, 16, 0) };
+            cardHeader.Controls.Add(lblDescription);
+            cardHeader.Controls.Add(lblTitle);
+
+            var titleLabel = new Label
+            {
+                Text = "Website icons",
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft
+            };
+            var descriptionLabel = new Label
+            {
+                Text = "Show each site's favicon instead of the coloured letter badge.",
+                Dock = DockStyle.Top,
+                Height = 20,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.TopLeft
+            };
+            var textStack = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            textStack.Controls.Add(descriptionLabel);
+            textStack.Controls.Add(titleLabel);
+
+            var iconsToggle = new CheckBox
+            {
+                Checked = AppPreferences.ShowWebsiteIcons,
+                Dock = DockStyle.Right,
+                Width = 40,
+                CheckAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                Cursor = Cursors.Hand,
+                BackColor = AppTheme.Surface
+            };
+            iconsToggle.CheckedChanged += (s, e) =>
+            {
+                AppPreferences.ShowWebsiteIcons = iconsToggle.Checked;
+                if (!dgvAccounts.IsDisposed && dgvAccounts.IsHandleCreated)
+                {
+                    dgvAccounts.Invalidate();
+                }
+                serviceBadge?.Invalidate();
+            };
+
+            var toggleRow = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = AppTheme.Surface, Padding = new Padding(16, 10, 16, 10) };
+            toggleRow.Controls.Add(textStack);
+            toggleRow.Controls.Add(iconsToggle);
+
+            var headerDivider = CreateInsetDivider();
+
+            const int headerHeight = 64;
+            const int rowHeight = 64;
+            const int dividerHeight = 1;
+            const int cardHeight = headerHeight + dividerHeight + rowHeight + 2;
+
+            var cardInset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            cardInset.Controls.Add(toggleRow);
+            cardInset.Controls.Add(headerDivider);
+            cardInset.Controls.Add(cardHeader);
+
+            var cardBorder = new Panel { Dock = DockStyle.Top, Height = cardHeight, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            cardBorder.Controls.Add(cardInset);
+
+            var cardWithMargin = new Panel { Dock = DockStyle.Top, Height = cardHeight + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16) };
+            cardWithMargin.Controls.Add(cardBorder);
+            return cardWithMargin;
         }
 
         /// Builds one clickable "title / description / ›" row for the Settings page's Vault
@@ -1228,6 +1323,7 @@ namespace PasswordManager
             bool isRevealed = passwordRevealTracker.IsRevealed(selectedAccount);
 
             serviceBadge.ServiceName = selectedAccount.Service;
+            serviceBadge.WebsiteUrl = selectedAccount.Url;
             lblDetailsService.Text = selectedAccount.Service;
             lblDetailsUrlLink.Text = selectedAccount.Url;
             lblDetailsUrlLink.Visible = !string.IsNullOrEmpty(selectedAccount.Url);

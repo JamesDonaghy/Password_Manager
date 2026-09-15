@@ -59,6 +59,15 @@ namespace PasswordManager
             grid.CellMouseMove += Grid_CellMouseMove;
             grid.MouseLeave += Grid_MouseLeave;
             grid.CellMouseClick += Grid_CellMouseClick;
+
+            // When a favicon finishes downloading, repaint so letter badges swap to icons.
+            FaviconCache.IconLoaded += _ =>
+            {
+                if (!grid.IsDisposed && grid.IsHandleCreated)
+                {
+                    grid.Invalidate();
+                }
+            };
         }
 
         /// Rebuilds the list's contents from the given accounts and search text. Call this
@@ -146,7 +155,7 @@ namespace PasswordManager
 
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // Service-initial badge, standing in for a real per-service icon.
+            // Website favicon when available; otherwise the coloured service-initial badge.
             const int badgeSize = 30;
             var badgeRect = new Rectangle(
                 e.CellBounds.Left + 12,
@@ -154,18 +163,37 @@ namespace PasswordManager
                 badgeSize,
                 badgeSize);
 
-            Color badgeColor = ServiceBadge.ColorFor(account.Service);
-            using (var badgeBrush = new SolidBrush(badgeColor))
-            using (var badgePath = ServiceBadge.RoundedRect(badgeRect, 7))
-            {
-                e.Graphics.FillPath(badgeBrush, badgePath);
-            }
+            // Prefer the entry URL; if empty, try the service name as a host (e.g. "youtube").
+            string iconSource = !string.IsNullOrWhiteSpace(account.Url) ? account.Url : account.Service;
+            Image favicon = FaviconCache.TryGet(iconSource);
 
-            string initial = ServiceBadge.InitialFor(account.Service);
-            using (var badgeFont = new Font(AppTheme.Base.FontFamily, 11f, FontStyle.Bold))
+            if (favicon != null)
             {
-                TextRenderer.DrawText(e.Graphics, initial, badgeFont, badgeRect, Color.White,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                using (var path = ServiceBadge.RoundedRect(badgeRect, 7))
+                {
+                    var oldClip = e.Graphics.Clip;
+                    e.Graphics.SetClip(path);
+                    e.Graphics.DrawImage(favicon, badgeRect);
+                    e.Graphics.Clip = oldClip;
+                }
+            }
+            else
+            {
+                Color badgeColor = ServiceBadge.ColorFor(account.Service);
+                using (var badgeBrush = new SolidBrush(badgeColor))
+                using (var badgePath = ServiceBadge.RoundedRect(badgeRect, 7))
+                {
+                    e.Graphics.FillPath(badgeBrush, badgePath);
+                }
+
+                string initial = ServiceBadge.InitialFor(account.Service);
+                using (var badgeFont = new Font(AppTheme.Base.FontFamily, 11f, FontStyle.Bold))
+                {
+                    TextRenderer.DrawText(e.Graphics, initial, badgeFont, badgeRect, Color.White,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                }
             }
 
             // Service name (top line) and username (bottom line), each ellipsised
