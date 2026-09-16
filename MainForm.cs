@@ -57,12 +57,11 @@ namespace PasswordManager
         // Tracks which accounts currently have their password shown in the grid.
         private readonly RevealedPasswordTracker passwordRevealTracker = new RevealedPasswordTracker();
 
-        // Auto-lock: returns to the login screen after 5 minutes with no mouse/keyboard
-        // activity anywhere in the app, so a vault left open on an unattended workstation
-        // doesn't stay exposed indefinitely. See ActivityMessageFilter for how activity is
-        // detected, and Lock() for what actually happens when it's time to lock.
-        private static readonly TimeSpan AutoLockTimeout = TimeSpan.FromMinutes(5);
-        private readonly System.Windows.Forms.Timer autoLockTimer = new System.Windows.Forms.Timer { Interval = 15000 }; // Checked every 15s; the 5-minute figure above is what actually matters. Fully qualified: System.Threading also has a Timer class, and this project's ImplicitUsings brings that namespace in globally, making the bare name ambiguous.
+        // Auto-lock: returns to the login screen after a configurable period of inactivity
+        // (see AppPreferences.AutoLockMinutes / Security page). 0 minutes = disabled.
+        // See ActivityMessageFilter for activity detection, and Lock() for what happens
+        // when it's time to lock.
+        private readonly System.Windows.Forms.Timer autoLockTimer = new System.Windows.Forms.Timer { Interval = 15000 }; // Checked every 15s; the preference minutes figure is what actually matters. Fully qualified: System.Threading also has a Timer class, and this project's ImplicitUsings brings that namespace in globally, making the bare name ambiguous.
         private readonly ActivityMessageFilter activityFilter = new ActivityMessageFilter();
         private DateTime lastActivityUtc = DateTime.UtcNow;
 
@@ -993,18 +992,36 @@ namespace PasswordManager
                 "Your master password protects your entire vault.",
                 changeMasterPasswordRow);
 
-            // Auto-Lock card: displays the existing fixed auto-lock behaviour (see
-            // AutoLockTimeout/AutoLockTimer_Tick). Not an editable/configurable setting -
-            // that functionality doesn't exist yet, so there's nothing to wire up here
-            // beyond showing the current value.
-            var lblAutoLockValue = new Label
+            // Auto-Lock card: dropdown of inactivity timeouts, persisted in AppPreferences.
+            var cmbAutoLock = new ComboBox
             {
-                Text = $"Locks after {(int)AutoLockTimeout.TotalMinutes} minutes of inactivity",
-                ForeColor = AppTheme.TextPrimary,
+                Dock = DockStyle.Fill,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Flat,
                 Font = AppTheme.Base,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.TextPrimary
             };
-            var autoLockValueRow = DialogControls.CreateBorderedFieldRow(lblAutoLockValue);
+            // Tag holds minutes (0 = never). Display text is user-facing only.
+            cmbAutoLock.Items.Add(new AutoLockOption(1, "1 minute"));
+            cmbAutoLock.Items.Add(new AutoLockOption(2, "2 minutes"));
+            cmbAutoLock.Items.Add(new AutoLockOption(5, "5 minutes"));
+            cmbAutoLock.Items.Add(new AutoLockOption(10, "10 minutes"));
+            cmbAutoLock.Items.Add(new AutoLockOption(15, "15 minutes"));
+            cmbAutoLock.Items.Add(new AutoLockOption(30, "30 minutes"));
+            cmbAutoLock.Items.Add(new AutoLockOption(0, "Never"));
+            cmbAutoLock.DisplayMember = nameof(AutoLockOption.Label);
+            cmbAutoLock.SelectedIndex = AutoLockMinutesToComboIndex(AppPreferences.AutoLockMinutes);
+            cmbAutoLock.SelectedIndexChanged += (s, e) =>
+            {
+                if (cmbAutoLock.SelectedItem is AutoLockOption option)
+                {
+                    AppPreferences.AutoLockMinutes = option.Minutes;
+                    lastActivityUtc = DateTime.UtcNow; // Reset so a shorter timeout doesn't lock immediately
+                }
+            };
+
+            var autoLockValueRow = DialogControls.CreateBorderedFieldRow(cmbAutoLock);
             autoLockValueRow.Height = 34;
 
             var autoLockCard = CreateSecurityCard(
@@ -1725,10 +1742,42 @@ namespace PasswordManager
                 return;
             }
 
-            if (DateTime.UtcNow - lastActivityUtc >= AutoLockTimeout)
+            int minutes = AppPreferences.AutoLockMinutes;
+            if (minutes <= 0)
+            {
+                return; // Auto-lock disabled ("Never")
+            }
+
+            if (DateTime.UtcNow - lastActivityUtc >= TimeSpan.FromMinutes(minutes))
             {
                 Lock();
             }
+        }
+
+        private static int AutoLockMinutesToComboIndex(int minutes) => minutes switch
+        {
+            1 => 0,
+            2 => 1,
+            5 => 2,
+            10 => 3,
+            15 => 4,
+            30 => 5,
+            0 => 6,
+            _ => 2 // Unknown saved value → show 5 minutes (historical default)
+        };
+
+        private sealed class AutoLockOption
+        {
+            public int Minutes { get; }
+            public string Label { get; }
+
+            public AutoLockOption(int minutes, string label)
+            {
+                Minutes = minutes;
+                Label = label;
+            }
+
+            public override string ToString() => Label;
         }
 
         private void Lock_Click(object sender, EventArgs e)

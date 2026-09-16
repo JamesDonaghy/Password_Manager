@@ -18,6 +18,7 @@ namespace PasswordManager
         private static bool loaded;
         private static bool showWebsiteIcons = true;
         private static AccountSortMode sortMode = AccountSortMode.NameAscending;
+        private static int autoLockMinutes = 5;
 
         /// When true, entry badges use website favicons when available; when false, the
         /// coloured letter badges are used exclusively (as before favicons were added).
@@ -62,6 +63,29 @@ namespace PasswordManager
             }
         }
 
+        /// Minutes of inactivity before the vault auto-locks. 0 means auto-lock is off.
+        /// Default is 5 to match the previous fixed behaviour.
+        public static int AutoLockMinutes
+        {
+            get
+            {
+                EnsureLoaded();
+                return autoLockMinutes;
+            }
+            set
+            {
+                EnsureLoaded();
+                int clamped = value < 0 ? 0 : value;
+                if (autoLockMinutes == clamped)
+                {
+                    return;
+                }
+
+                autoLockMinutes = clamped;
+                Save();
+            }
+        }
+
         private static void EnsureLoaded()
         {
             if (loaded)
@@ -87,6 +111,11 @@ namespace PasswordManager
                     {
                         sortMode = parsed;
                     }
+
+                    if (data.AutoLockMinutes.HasValue && data.AutoLockMinutes.Value >= 0)
+                    {
+                        autoLockMinutes = data.AutoLockMinutes.Value;
+                    }
                 }
             }
             catch
@@ -108,7 +137,8 @@ namespace PasswordManager
                 var data = new PreferencesData
                 {
                     ShowWebsiteIcons = showWebsiteIcons,
-                    SortMode = sortMode.ToString()
+                    SortMode = sortMode.ToString(),
+                    AutoLockMinutes = autoLockMinutes
                 };
                 File.WriteAllText(FilePath, JsonSerializer.Serialize(data));
             }
@@ -122,6 +152,7 @@ namespace PasswordManager
         {
             public bool ShowWebsiteIcons { get; set; } = true;
             public string SortMode { get; set; } = nameof(AccountSortMode.NameAscending);
+            public int? AutoLockMinutes { get; set; }
         }
     }
 }
