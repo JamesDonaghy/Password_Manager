@@ -17,6 +17,7 @@ namespace PasswordManager
 
         private static bool loaded;
         private static bool showWebsiteIcons = true;
+        private static AccountSortMode sortMode = AccountSortMode.NameAscending;
 
         /// When true, entry badges use website favicons when available; when false, the
         /// coloured letter badges are used exclusively (as before favicons were added).
@@ -36,6 +37,27 @@ namespace PasswordManager
                 }
 
                 showWebsiteIcons = value;
+                Save();
+            }
+        }
+
+        /// Display order for the vault list. Does not change stored vault order.
+        public static AccountSortMode SortMode
+        {
+            get
+            {
+                EnsureLoaded();
+                return sortMode;
+            }
+            set
+            {
+                EnsureLoaded();
+                if (sortMode == value)
+                {
+                    return;
+                }
+
+                sortMode = value;
                 Save();
             }
         }
@@ -60,6 +82,11 @@ namespace PasswordManager
                 if (data != null)
                 {
                     showWebsiteIcons = data.ShowWebsiteIcons;
+                    if (!string.IsNullOrEmpty(data.SortMode) &&
+                        Enum.TryParse(data.SortMode, ignoreCase: true, out AccountSortMode parsed))
+                    {
+                        sortMode = parsed;
+                    }
                 }
             }
             catch
@@ -78,7 +105,11 @@ namespace PasswordManager
                     Directory.CreateDirectory(directory);
                 }
 
-                var data = new PreferencesData { ShowWebsiteIcons = showWebsiteIcons };
+                var data = new PreferencesData
+                {
+                    ShowWebsiteIcons = showWebsiteIcons,
+                    SortMode = sortMode.ToString()
+                };
                 File.WriteAllText(FilePath, JsonSerializer.Serialize(data));
             }
             catch
@@ -90,6 +121,7 @@ namespace PasswordManager
         private sealed class PreferencesData
         {
             public bool ShowWebsiteIcons { get; set; } = true;
+            public string SortMode { get; set; } = nameof(AccountSortMode.NameAscending);
         }
     }
 }

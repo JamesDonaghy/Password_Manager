@@ -24,6 +24,7 @@ namespace PasswordManager
         private IEnumerable<Account> lastAccounts = Enumerable.Empty<Account>();
         private string lastSearchText = string.Empty;
         private bool lastFavoritesOnly;
+        private AccountSortMode sortMode = AccountSortMode.NameAscending;
 
         // Which row the mouse is currently over, for the hover highlight - DataGridView
         // has no built-in concept of row hover, so this is tracked manually and the
@@ -34,6 +35,23 @@ namespace PasswordManager
         /// IsFavorite flag has already been toggled; the subscriber should persist and
         /// refresh (e.g. via BindingList.ResetItem).
         public event Action<Account> FavoriteToggled;
+
+        /// Current list sort. Changing this and calling Refresh (or SetSortMode) reorders
+        /// the visible rows without altering the underlying vault order on disk.
+        public AccountSortMode SortMode
+        {
+            get => sortMode;
+            set
+            {
+                if (sortMode == value)
+                {
+                    return;
+                }
+
+                sortMode = value;
+                RefreshInternal();
+            }
+        }
 
         public AccountGridPresenter(DataGridView grid)
         {
@@ -55,17 +73,39 @@ namespace PasswordManager
             };
             grid.Columns.Add(entryColumn);
 
+            // DataGridView does not expose DoubleBuffered publicly; without it, custom CellPainting
+            // (and icon swaps) flicker as the control erases then redraws.
+            typeof(DataGridView)
+                .GetProperty("DoubleBuffered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?.SetValue(grid, true, null);
+
             grid.CellPainting += Grid_CellPainting;
             grid.CellMouseMove += Grid_CellMouseMove;
             grid.MouseLeave += Grid_MouseLeave;
             grid.CellMouseClick += Grid_CellMouseClick;
 
-            // When a favicon finishes downloading, repaint so letter badges swap to icons.
-            FaviconCache.IconLoaded += _ =>
+            // When a favicon finishes downloading, repaint only rows that use that host
+            // instead of invalidating the whole grid (which caused visible flicker).
+            FaviconCache.IconLoaded += host =>
             {
-                if (!grid.IsDisposed && grid.IsHandleCreated)
+                if (grid.IsDisposed || !grid.IsHandleCreated)
                 {
-                    grid.Invalidate();
+                    return;
+                }
+
+                foreach (DataGridViewRow row in grid.Rows)
+                {
+                    if (!(row.DataBoundItem is Account account))
+                    {
+                        continue;
+                    }
+
+                    string source = !string.IsNullOrWhiteSpace(account.Url) ? account.Url : account.Service;
+                    string key = FaviconCache.HostKeyFrom(source);
+                    if (key != null && string.Equals(key, host, StringComparison.OrdinalIgnoreCase))
+                    {
+                        grid.InvalidateRow(row.Index);
+                    }
                 }
             };
         }
@@ -102,6 +142,8 @@ namespace PasswordManager
                     Contains(a.Username, filterText) ||
                     Contains(a.Url, filterText) ||
                     Contains(a.Notes, filterText));
+
+            filtered = ApplySort(filtered);
 
             grid.DataSource = new BindingList<Account>(filtered.ToList());
             hoveredRowIndex = -1; // Row indices are meaningless after a full rebind
@@ -308,5 +350,41 @@ namespace PasswordManager
         {
             return value != null && value.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
         }
+
+        private IEnumerable<Account> ApplySort(IEnumerable<Account> accounts)
+        {
+            switch (sortMode)
+            {
+                case AccountSortMode.NameDescending:
+                    return accounts.OrderByDescending(a => a.Service ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+                case AccountSortMode.UsernameAscending:
+                    return accounts.OrderBy(a => a.Username ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(a => a.Service ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+                case AccountSortMode.RecentlyModified:
+                    // Null ModifiedAt sorts last (oldest / unknown).
+                    return accounts.OrderByDescending(a => a.ModifiedAt ?? DateTime.MinValue)
+                        .ThenBy(a => a.Service ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+                case AccountSortMode.RecentlyCreated:
+                    return accounts.OrderByDescending(a => a.CreatedAt ?? DateTime.MinValue)
+                        .ThenBy(a => a.Service ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+                case AccountSortMode.FavouritesFirst:
+                    return accounts.OrderByDescending(a => a.IsFavorite)
+                        .ThenBy(a => a.Service ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+                case AccountSortMode.NameAscending:
+                default:
+                    return accounts.OrderBy(a => a.Service ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+            }
+        }
+    }
+
+    /// How the vault list is ordered. Display-only — does not change stored vault order.
+    public enum AccountSortMode
+    {
+        NameAscending,
+        NameDescending,
+        UsernameAscending,
+        RecentlyModified,
+        RecentlyCreated,
+        FavouritesFirst
     }
 }

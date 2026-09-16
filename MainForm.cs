@@ -12,6 +12,7 @@ namespace PasswordManager
         private DataGridView dgvAccounts;
         private TextBox txtSearch;
         private Label lblEntryCount;
+        private ComboBox cmbSort;
         private Label lblSidebarAllItemsCount;
         private Panel leftNavPanel;
         private Panel selectedNavRow; // Whichever sidebar nav row (All Items/Favorites/Security/Settings) is currently highlighted - see CreateNavRow/SelectNavRow
@@ -161,7 +162,7 @@ namespace PasswordManager
                 TextAlign = System.Drawing.ContentAlignment.TopLeft
             };
 
-            var headerBottomSpacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.Background };
+            var headerBottomSpacer = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background };
 
             this.txtSearch = new TextBox
             {
@@ -190,14 +191,73 @@ namespace PasswordManager
 
             var searchBorder = new Panel
             {
-                Dock = DockStyle.Top,
-                Height = 38,
+                Dock = DockStyle.Fill,
                 Padding = new Padding(1),
                 BackColor = AppTheme.Border
             };
             searchBorder.Controls.Add(searchInset);
 
-            // Empty spacer so the search field doesn't sit flush against the grid below it.
+            // Sort control sits beside search in a matching bordered field (see reference UI).
+            // Display-only; does not change vault order on disk.
+            this.cmbSort = new ComboBox
+            {
+                Dock = DockStyle.Fill,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Flat,
+                Font = AppTheme.Base,
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.TextPrimary
+            };
+            this.cmbSort.Items.AddRange(new object[]
+            {
+                "Sort: Name (A–Z)",
+                "Sort: Name (Z–A)",
+                "Sort: Username (A–Z)",
+                "Sort: Recently modified",
+                "Sort: Recently created",
+                "Sort: Favourites first"
+            });
+            // Index applied after gridPresenter exists so the saved preference both selects
+            // the combo and drives the first list refresh.
+            this.cmbSort.SelectedIndexChanged += CmbSort_SelectedIndexChanged;
+
+            var sortInset = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(8, 6, 4, 6)
+            };
+            sortInset.Controls.Add(this.cmbSort);
+
+            var sortBorder = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = 200,
+                Padding = new Padding(1),
+                BackColor = AppTheme.Border
+            };
+            sortBorder.Controls.Add(sortInset);
+
+            // Gap between search and sort fields.
+            var searchSortGap = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = 10,
+                BackColor = AppTheme.Background
+            };
+
+            // One row: search (fill) + gap + sort (fixed), same height as the old search bar.
+            var searchSortRow = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 38,
+                BackColor = AppTheme.Background
+            };
+            searchSortRow.Controls.Add(searchBorder);
+            searchSortRow.Controls.Add(searchSortGap);
+            searchSortRow.Controls.Add(sortBorder);
+
+            // Empty spacer so the search/sort row doesn't sit flush against the grid below it.
             var searchSpacer = new Panel
             {
                 Dock = DockStyle.Top,
@@ -216,6 +276,10 @@ namespace PasswordManager
             // the details panel now (see RefreshDetailsPanel).
             this.gridPresenter = new AccountGridPresenter(this.dgvAccounts);
             this.gridPresenter.FavoriteToggled += OnFavoriteToggled;
+
+            // Restore last sort choice before the first Refresh in InitializeDataGridView.
+            this.gridPresenter.SortMode = AppPreferences.SortMode;
+            this.cmbSort.SelectedIndex = SortModeToComboIndex(AppPreferences.SortMode);
 
             // If a copied password is still sitting on the clipboard when the app closes,
             // the auto-clear timer never gets the chance to fire - clear it here instead.
@@ -301,7 +365,7 @@ namespace PasswordManager
             this.middlePanel = middlePanel;
             middlePanel.Controls.Add(this.dgvAccounts);
             middlePanel.Controls.Add(searchSpacer);
-            middlePanel.Controls.Add(searchBorder);
+            middlePanel.Controls.Add(searchSortRow);
             middlePanel.Controls.Add(headerBottomSpacer);
             middlePanel.Controls.Add(this.lblEntryCount);
             middlePanel.Controls.Add(titleRow);
@@ -1407,6 +1471,38 @@ namespace PasswordManager
         {
             gridPresenter.Refresh(accounts, txtSearch.Text, showFavoritesOnly);
         }
+
+        private void CmbSort_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (gridPresenter == null || cmbSort.SelectedIndex < 0)
+            {
+                return;
+            }
+
+            AccountSortMode mode = ComboIndexToSortMode(cmbSort.SelectedIndex);
+            AppPreferences.SortMode = mode;
+            gridPresenter.SortMode = mode;
+        }
+
+        private static AccountSortMode ComboIndexToSortMode(int index) => index switch
+        {
+            1 => AccountSortMode.NameDescending,
+            2 => AccountSortMode.UsernameAscending,
+            3 => AccountSortMode.RecentlyModified,
+            4 => AccountSortMode.RecentlyCreated,
+            5 => AccountSortMode.FavouritesFirst,
+            _ => AccountSortMode.NameAscending
+        };
+
+        private static int SortModeToComboIndex(AccountSortMode mode) => mode switch
+        {
+            AccountSortMode.NameDescending => 1,
+            AccountSortMode.UsernameAscending => 2,
+            AccountSortMode.RecentlyModified => 3,
+            AccountSortMode.RecentlyCreated => 4,
+            AccountSortMode.FavouritesFirst => 5,
+            _ => 0
+        };
 
         /// Persists a favourite toggle (BindingList does not raise ListChanged for in-place
         /// property changes) and refreshes the grid so a favourites-only view drops the
