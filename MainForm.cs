@@ -21,6 +21,21 @@ namespace PasswordManager
         private Panel middlePanel;
         private Panel securityMiddlePanel;
         private Panel securityRightPanel;
+        private Label lblHealthTotal;
+        private Label lblHealthExposedCount;
+        private Label lblHealthReusedCount;
+        private Label lblHealthWeakCount;
+        private Label lblHealthOldCount;
+        private Label lblIssueReusedDesc;
+        private Label lblIssueWeakDesc;
+        private Label lblIssueOldDesc;
+        private Label lblIssueReusedCount;
+        private Label lblIssueWeakCount;
+        private Label lblIssueOldCount;
+        private Label lblSecurityRightTitle;
+        private Label lblSecurityRightHint;
+        private Panel securityIssueEntriesHost;
+        private PasswordHealth.IssueKind? activeSecurityIssue;
         private Panel settingsMiddlePanel;
         private Panel settingsRightPanel;
         private Panel rightDetailsPanel;
@@ -887,6 +902,7 @@ namespace PasswordManager
             settingsRightPanel.Visible = false;
             securityMiddlePanel.Visible = true;
             securityRightPanel.Visible = true;
+            RefreshSecurityHealth();
         }
 
         /// Switches the middle/right columns to the Settings page, hiding the vault's grid
@@ -902,107 +918,389 @@ namespace PasswordManager
             settingsRightPanel.Visible = true;
         }
 
-        /// Builds the Security page's middle (heading + Master Password/Auto-Lock cards)
-        /// and right (summary) panels, shown instead of the vault's middle/details panels
-        /// while the Security nav row is selected. Both panels are built once up front and
-        /// just toggled Visible by ShowVaultView/ShowSecurityView - simpler and safer than
-        /// building/tearing them down on every navigation.
+        /// Builds the Security page: Password Health, Security Issues, and Security Settings
+        /// (master password + auto-lock), with a right panel that lists entries for a selected issue.
         private void BuildSecurityPage(out Panel securityMiddle, out Panel securityRight)
         {
-            // --- Middle: heading + cards ---
-            var backArrow = new Label
+            var lblSecurityHeading = new Label
+            {
+                Text = "Security",
+                Dock = DockStyle.Top,
+                Height = 36,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            var lblSecuritySubtitle = new Label
+            {
+                Text = "Keep your vault safe and secure",
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary
+            };
+            var spacerAfterSubtitle = new Panel { Dock = DockStyle.Top, Height = 14, BackColor = AppTheme.Background };
+
+            // --- Password Health summary card ---
+            var healthCard = BuildPasswordHealthCard();
+
+            // --- Security Issues rows ---
+            var issuesCard = BuildSecurityIssuesCard();
+
+            // --- Security Settings (master password + auto-lock) ---
+            var settingsCard = BuildSecuritySettingsCard();
+
+            var securityContent = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 12) };
+            // Dock=Top stacks reverse of add order.
+            securityContent.Controls.Add(settingsCard);
+            securityContent.Controls.Add(issuesCard);
+            securityContent.Controls.Add(healthCard);
+            securityContent.Controls.Add(spacerAfterSubtitle);
+            securityContent.Controls.Add(lblSecuritySubtitle);
+            securityContent.Controls.Add(lblSecurityHeading);
+
+            securityMiddle = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background, Padding = new Padding(16, 14, 16, 0) };
+            securityMiddle.Controls.Add(securityContent);
+
+            // --- Right: issue detail / placeholder ---
+            var backToOverview = new Label
             {
                 Text = "←",
                 Dock = DockStyle.Left,
-                Width = 32,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 14f),
+                Width = 28,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
                 ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
                 Cursor = Cursors.Hand
             };
-            backArrow.Click += (sender, e) => ShowVaultView();
+            backToOverview.Click += (s, e) => ShowSecurityIssueOverview();
 
-            var lblSecurityHeading = new Label
+            lblSecurityRightTitle = new Label
             {
-                Text = "Security",
+                Text = "Password Health",
                 Dock = DockStyle.Fill,
                 Font = AppTheme.Heading,
                 ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
-            var titleRow = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = AppTheme.Background };
-            titleRow.Controls.Add(lblSecurityHeading);
-            titleRow.Controls.Add(backArrow);
+            var rightTitleRow = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = AppTheme.PanelBackground };
+            rightTitleRow.Controls.Add(lblSecurityRightTitle);
+            rightTitleRow.Controls.Add(backToOverview);
 
-            var lblSecuritySubtitle = new Label
+            lblSecurityRightHint = new Label
             {
-                Text = "Keep your vault safe and secure",
+                Text = "Select an issue to see affected entries.",
                 Dock = DockStyle.Top,
-                Height = 24,
+                Height = 40,
                 Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary,
-                Padding = new Padding(2, 0, 0, 0)
+                ForeColor = AppTheme.TextSecondary
             };
-            var spacerAfterSubtitle = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.Background };
 
-            // Master Password card: a bordered row that looks/behaves like the other
-            // clickable rows in the app, opening the exact same Change Master Password
-            // dialog as the top Settings menu - no new dialog or logic here.
-            var lblChangeMasterPassword = new Label
-            {
-                Text = "Change Master Password",
-                ForeColor = AppTheme.TextPrimary,
-                Font = AppTheme.Base,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                Cursor = Cursors.Hand
-            };
-            var lblChangeMasterPasswordChevron = new Label
-            {
-                Text = "›",
-                Dock = DockStyle.Right,
-                Width = 24,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
-                ForeColor = AppTheme.TextSecondary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                Cursor = Cursors.Hand
-            };
-            var changeMasterPasswordRow = DialogControls.CreateBorderedFieldRow(lblChangeMasterPassword, lblChangeMasterPasswordChevron);
-            changeMasterPasswordRow.Height = 34;
-            EventHandler openChangeMasterPassword = ChangeMasterPassword_Click; // Same handler as the Settings menu item - not a new dialog
-            lblChangeMasterPassword.Click += openChangeMasterPassword;
-            lblChangeMasterPasswordChevron.Click += openChangeMasterPassword;
-            changeMasterPasswordRow.Click += openChangeMasterPassword;
-
-            // Same purple hover tint used by sidebar nav rows. The bordered field's
-            // surface is the inset child panel (BackColor = Surface).
-            var changeMasterPasswordInset = changeMasterPasswordRow.Controls[0];
-            EventHandler changeMasterHoverOn = (s, e) => changeMasterPasswordInset.BackColor = AppTheme.AccentSubtle;
-            EventHandler changeMasterHoverOff = (s, e) => changeMasterPasswordInset.BackColor = AppTheme.Surface;
-            changeMasterPasswordRow.MouseEnter += changeMasterHoverOn;
-            changeMasterPasswordRow.MouseLeave += changeMasterHoverOff;
-            changeMasterPasswordInset.MouseEnter += changeMasterHoverOn;
-            changeMasterPasswordInset.MouseLeave += changeMasterHoverOff;
-            lblChangeMasterPassword.MouseEnter += changeMasterHoverOn;
-            lblChangeMasterPassword.MouseLeave += changeMasterHoverOff;
-            lblChangeMasterPasswordChevron.MouseEnter += changeMasterHoverOn;
-            lblChangeMasterPasswordChevron.MouseLeave += changeMasterHoverOff;
-
-            var masterPasswordCard = CreateSecurityCard(
-                "Master Password",
-                "Your master password protects your entire vault.",
-                changeMasterPasswordRow);
-
-            // Auto-Lock card: dropdown of inactivity timeouts, persisted in AppPreferences.
-            var cmbAutoLock = new ComboBox
+            securityIssueEntriesHost = new Panel
             {
                 Dock = DockStyle.Fill,
+                AutoScroll = true,
+                BackColor = AppTheme.PanelBackground,
+                Padding = new Padding(0, 8, 0, 0)
+            };
+
+            securityRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 20, 16, 20) };
+            securityRight.Controls.Add(securityIssueEntriesHost);
+            securityRight.Controls.Add(lblSecurityRightHint);
+            securityRight.Controls.Add(rightTitleRow);
+        }
+
+        private Panel BuildPasswordHealthCard()
+        {
+            var title = new Label
+            {
+                Text = "Password Health",
+                Dock = DockStyle.Top,
+                Height = 24,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary
+            };
+            var subtitle = new Label
+            {
+                Text = "Check your vault for common security issues.",
+                Dock = DockStyle.Top,
+                Height = 20,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary
+            };
+
+            lblHealthTotal = new Label
+            {
+                Text = "0",
+                Dock = DockStyle.Top,
+                Height = 36,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 22f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.BottomCenter
+            };
+            var totalCaption = new Label
+            {
+                Text = "vault entries",
+                Dock = DockStyle.Top,
+                Height = 20,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.TopCenter
+            };
+            var totalCol = new Panel { Dock = DockStyle.Left, Width = 110, BackColor = AppTheme.Surface, Padding = new Padding(8, 8, 8, 8) };
+            totalCol.Controls.Add(totalCaption);
+            totalCol.Controls.Add(lblHealthTotal);
+
+            lblHealthExposedCount = new Label { Text = "0", Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
+            lblHealthReusedCount = new Label { Text = "0", Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
+            lblHealthWeakCount = new Label { Text = "0", Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
+            lblHealthOldCount = new Label { Text = "0", Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
+
+            var statsStack = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(12, 4, 8, 4) };
+            // Dock=Top stacks reverse of add order — add bottom row first.
+            statsStack.Controls.Add(CreateHealthStatRow("⚠", "Old passwords", lblHealthOldCount, System.Drawing.Color.DarkOrange));
+            statsStack.Controls.Add(CreateHealthStatRow("⚠", "Weak passwords", lblHealthWeakCount, System.Drawing.Color.DarkOrange));
+            statsStack.Controls.Add(CreateHealthStatRow("⚠", "Reused passwords", lblHealthReusedCount, System.Drawing.Color.DarkOrange));
+            statsStack.Controls.Add(CreateHealthStatRow("✓", "No exposed passwords", lblHealthExposedCount, System.Drawing.Color.SeaGreen));
+
+            var body = new Panel { Dock = DockStyle.Top, Height = 120, BackColor = AppTheme.Surface };
+            body.Controls.Add(statsStack);
+            body.Controls.Add(totalCol);
+
+            var header = new Panel { Dock = DockStyle.Top, Height = 48, BackColor = AppTheme.Surface };
+            header.Controls.Add(subtitle);
+            header.Controls.Add(title);
+
+            const int cardHeight = 48 + 120 + 32;
+            var inset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(16, 12, 16, 12) };
+            inset.Controls.Add(body);
+            inset.Controls.Add(header);
+
+            var border = new Panel { Dock = DockStyle.Top, Height = cardHeight, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            border.Controls.Add(inset);
+            return new Panel { Dock = DockStyle.Top, Height = cardHeight + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16), Controls = { border } };
+        }
+
+        private static Panel CreateHealthStatRow(string icon, string text, Label countLabel, System.Drawing.Color iconColor)
+        {
+            var iconLbl = new Label
+            {
+                Text = icon,
+                Dock = DockStyle.Left,
+                Width = 22,
+                Font = AppTheme.Base,
+                ForeColor = iconColor,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+            var textLbl = new Label
+            {
+                Text = text,
+                Dock = DockStyle.Fill,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            var row = new Panel { Dock = DockStyle.Top, Height = 26, BackColor = AppTheme.Surface };
+            row.Controls.Add(textLbl);
+            row.Controls.Add(countLabel);
+            row.Controls.Add(iconLbl);
+            return row;
+        }
+
+        private Panel BuildSecurityIssuesCard()
+        {
+            var sectionLabel = new Label
+            {
+                Text = "SECURITY ISSUES",
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 8.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft
+            };
+
+            lblIssueReusedDesc = new Label();
+            lblIssueWeakDesc = new Label();
+            lblIssueOldDesc = new Label();
+            lblIssueReusedCount = new Label();
+            lblIssueWeakCount = new Label();
+            lblIssueOldCount = new Label();
+
+            var reusedRow = CreateSecurityIssueRow(
+                "Reused Passwords",
+                lblIssueReusedDesc,
+                lblIssueReusedCount,
+                PasswordHealth.IssueKind.Reused);
+            var weakRow = CreateSecurityIssueRow(
+                "Weak Passwords",
+                lblIssueWeakDesc,
+                lblIssueWeakCount,
+                PasswordHealth.IssueKind.Weak);
+            var oldRow = CreateSecurityIssueRow(
+                "Old Passwords",
+                lblIssueOldDesc,
+                lblIssueOldCount,
+                PasswordHealth.IssueKind.Old);
+
+            var stack = new Panel { Dock = DockStyle.Top, Height = 22 + 56 * 3 + 2, BackColor = AppTheme.Surface };
+            // reverse dock order
+            stack.Controls.Add(oldRow);
+            stack.Controls.Add(CreateInsetDivider());
+            stack.Controls.Add(weakRow);
+            stack.Controls.Add(CreateInsetDivider());
+            stack.Controls.Add(reusedRow);
+            stack.Controls.Add(sectionLabel);
+
+            var inset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10) };
+            inset.Controls.Add(stack);
+
+            int cardHeight = 22 + 56 * 3 + 24;
+            var border = new Panel { Dock = DockStyle.Top, Height = cardHeight, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            border.Controls.Add(inset);
+            return new Panel { Dock = DockStyle.Top, Height = cardHeight + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16), Controls = { border } };
+        }
+
+        private Panel CreateSecurityIssueRow(string title, Label descLabel, Label countLabel, PasswordHealth.IssueKind kind)
+        {
+            var titleLbl = new Label
+            {
+                Text = title,
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary
+            };
+            descLabel.Dock = DockStyle.Top;
+            descLabel.Height = 20;
+            descLabel.Font = AppTheme.Base;
+            descLabel.ForeColor = AppTheme.TextSecondary;
+            descLabel.Text = PasswordHealth.DescriptionFor(kind, 0);
+
+            var textStack = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            textStack.Controls.Add(descLabel);
+            textStack.Controls.Add(titleLbl);
+
+            countLabel.Dock = DockStyle.Right;
+            countLabel.Width = 36;
+            countLabel.Font = AppTheme.Base;
+            countLabel.ForeColor = AppTheme.TextSecondary;
+            countLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            countLabel.Text = "0";
+
+            // Compact button: Dock=Right alone stretches to full row height, so host it.
+            var viewBtn = DialogControls.CreateInlineActionButton("View Entries ›", 102, 26);
+            viewBtn.Click += (s, e) => ShowSecurityIssue(kind);
+            var viewHost = CreateRightAlignedControlHost(viewBtn, 108, 26);
+
+            var row = new Panel { Dock = DockStyle.Top, Height = 56, BackColor = AppTheme.Surface, Padding = new Padding(4, 6, 4, 6) };
+            row.Controls.Add(textStack);
+            row.Controls.Add(countLabel);
+            row.Controls.Add(viewHost);
+            return row;
+        }
+
+        /// Hosts a fixed-size control on the right of a row without stretching it to the
+        /// full row height (plain Dock=Right would expand Height to match the parent).
+        private static Panel CreateRightAlignedControlHost(Control control, int hostWidth, int controlHeight)
+        {
+            var host = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = hostWidth,
+                BackColor = AppTheme.Surface
+            };
+            control.Dock = DockStyle.None;
+            control.Height = controlHeight;
+            control.Width = Math.Min(control.Width, hostWidth);
+            host.Controls.Add(control);
+            host.Resize += (s, e) =>
+            {
+                control.Left = Math.Max(0, host.ClientSize.Width - control.Width);
+                control.Top = Math.Max(0, (host.ClientSize.Height - control.Height) / 2);
+            };
+            // Initial position before first resize.
+            control.Left = Math.Max(0, hostWidth - control.Width);
+            control.Top = 0;
+            return host;
+        }
+
+        private Panel BuildSecuritySettingsCard()
+        {
+            var sectionLabel = new Label
+            {
+                Text = "Security Settings",
+                Dock = DockStyle.Top,
+                Height = 24,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary
+            };
+            var sectionSub = new Label
+            {
+                Text = "Manage your vault security settings.",
+                Dock = DockStyle.Top,
+                Height = 20,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary
+            };
+
+            // Master password row
+            var mpTitle = new Label
+            {
+                Text = "Master Password",
+                Dock = DockStyle.Top,
+                Height = 20,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary
+            };
+            var mpDesc = new Label
+            {
+                Text = "Change your master password.",
+                Dock = DockStyle.Top,
+                Height = 18,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary
+            };
+            var mpText = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            mpText.Controls.Add(mpDesc);
+            mpText.Controls.Add(mpTitle);
+            var mpBtn = DialogControls.CreateInlineActionButton("Change Master Password ›", 168, 26);
+            mpBtn.Click += ChangeMasterPassword_Click;
+            var mpHost = CreateRightAlignedControlHost(mpBtn, 176, 26);
+            var mpRow = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = AppTheme.Surface, Padding = new Padding(4, 6, 4, 6) };
+            mpRow.Controls.Add(mpText);
+            mpRow.Controls.Add(mpHost);
+
+            // Auto-lock row
+            var alTitle = new Label
+            {
+                Text = "Auto-Lock",
+                Dock = DockStyle.Top,
+                Height = 20,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary
+            };
+            var alDesc = new Label
+            {
+                Text = "Automatically lock the vault after inactivity.",
+                Dock = DockStyle.Top,
+                Height = 18,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary
+            };
+            var alText = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            alText.Controls.Add(alDesc);
+            alText.Controls.Add(alTitle);
+
+            var cmbAutoLock = new ComboBox
+            {
+                Width = 110,
+                Height = 22,
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 FlatStyle = FlatStyle.Flat,
                 Font = AppTheme.Base,
                 BackColor = AppTheme.Surface,
                 ForeColor = AppTheme.TextPrimary
             };
-            // Tag holds minutes (0 = never). Display text is user-facing only.
             cmbAutoLock.Items.Add(new AutoLockOption(1, "1 minute"));
             cmbAutoLock.Items.Add(new AutoLockOption(2, "2 minutes"));
             cmbAutoLock.Items.Add(new AutoLockOption(5, "5 minutes"));
@@ -1017,51 +1315,164 @@ namespace PasswordManager
                 if (cmbAutoLock.SelectedItem is AutoLockOption option)
                 {
                     AppPreferences.AutoLockMinutes = option.Minutes;
-                    lastActivityUtc = DateTime.UtcNow; // Reset so a shorter timeout doesn't lock immediately
+                    lastActivityUtc = DateTime.UtcNow;
                 }
             };
+            cmbAutoLock.Height = 26;
+            var alHost = CreateRightAlignedControlHost(cmbAutoLock, 118, 26);
 
-            var autoLockValueRow = DialogControls.CreateBorderedFieldRow(cmbAutoLock);
-            autoLockValueRow.Height = 34;
+            var alRow = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = AppTheme.Surface, Padding = new Padding(4, 6, 4, 6) };
+            alRow.Controls.Add(alText);
+            alRow.Controls.Add(alHost);
 
-            var autoLockCard = CreateSecurityCard(
-                "Auto-Lock",
-                "Automatically locks the vault after a period of inactivity.",
-                autoLockValueRow);
+            var header = new Panel { Dock = DockStyle.Top, Height = 48, BackColor = AppTheme.Surface };
+            header.Controls.Add(sectionSub);
+            header.Controls.Add(sectionLabel);
 
-            var securityContent = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 12) };
-            // Dock=Top siblings stack in reverse of add order (last added ends up closest
-            // to the top edge) - same quirk called out throughout this file.
-            securityContent.Controls.Add(autoLockCard);
-            securityContent.Controls.Add(masterPasswordCard);
-            securityContent.Controls.Add(spacerAfterSubtitle);
-            securityContent.Controls.Add(lblSecuritySubtitle);
-            securityContent.Controls.Add(titleRow);
+            var stack = new Panel { Dock = DockStyle.Top, Height = 48 + 52 + 1 + 52, BackColor = AppTheme.Surface };
+            stack.Controls.Add(alRow);
+            stack.Controls.Add(CreateInsetDivider());
+            stack.Controls.Add(mpRow);
+            stack.Controls.Add(header);
 
-            securityMiddle = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background, Padding = new Padding(16, 14, 16, 0) };
-            securityMiddle.Controls.Add(securityContent);
+            int cardHeight = 48 + 52 + 1 + 52 + 24;
+            var inset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10) };
+            inset.Controls.Add(stack);
+            var border = new Panel { Dock = DockStyle.Top, Height = cardHeight, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            border.Controls.Add(inset);
+            return new Panel { Dock = DockStyle.Top, Height = cardHeight + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16), Controls = { border } };
+        }
 
-            // --- Right: summary panel ---
-            var lblRightHeading = new Label { Text = "Security", Dock = DockStyle.Top, Height = 32, Font = AppTheme.Heading, ForeColor = AppTheme.TextPrimary, TextAlign = System.Drawing.ContentAlignment.MiddleCenter };
-            var lblRightSubtitle = new Label { Text = "Your vault, your security", Dock = DockStyle.Top, Height = 24, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.TopCenter };
-            var rightDividerSpacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.PanelBackground };
-            var rightDividerLine = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = AppTheme.Border };
-            var rightDividerSpacerAfter = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.PanelBackground };
+        private void RefreshSecurityHealth()
+        {
+            if (accounts == null || lblHealthTotal == null)
+            {
+                return;
+            }
 
-            // Only the two things actually covered by this update get a checklist line -
-            // deliberately not claiming coverage (e.g. "regular security checks") for
-            // anything that isn't real yet.
-            var checklistItem2 = CreateChecklistItem("Auto-lock for extra safety");
-            var checklistItem1 = CreateChecklistItem("Master password protection");
+            var report = PasswordHealth.Analyze(accounts);
+            lblHealthTotal.Text = report.TotalEntries.ToString();
+            lblHealthExposedCount.Text = report.ExposedCount.ToString();
+            lblHealthReusedCount.Text = report.Reused.Count.ToString();
+            lblHealthWeakCount.Text = report.Weak.Count.ToString();
+            lblHealthOldCount.Text = report.Old.Count.ToString();
 
-            securityRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 20, 16, 20) };
-            securityRight.Controls.Add(checklistItem2);
-            securityRight.Controls.Add(checklistItem1);
-            securityRight.Controls.Add(rightDividerSpacerAfter);
-            securityRight.Controls.Add(rightDividerLine);
-            securityRight.Controls.Add(rightDividerSpacer);
-            securityRight.Controls.Add(lblRightSubtitle);
-            securityRight.Controls.Add(lblRightHeading);
+            lblIssueReusedDesc.Text = PasswordHealth.DescriptionFor(PasswordHealth.IssueKind.Reused, report.Reused.Count);
+            lblIssueWeakDesc.Text = PasswordHealth.DescriptionFor(PasswordHealth.IssueKind.Weak, report.Weak.Count);
+            lblIssueOldDesc.Text = PasswordHealth.DescriptionFor(PasswordHealth.IssueKind.Old, report.Old.Count);
+            lblIssueReusedCount.Text = report.Reused.Count.ToString();
+            lblIssueWeakCount.Text = report.Weak.Count.ToString();
+            lblIssueOldCount.Text = report.Old.Count.ToString();
+
+            if (activeSecurityIssue is PasswordHealth.IssueKind kind)
+            {
+                ShowSecurityIssue(kind);
+            }
+        }
+
+        private void ShowSecurityIssueOverview()
+        {
+            activeSecurityIssue = null;
+            if (lblSecurityRightTitle != null)
+            {
+                lblSecurityRightTitle.Text = "Password Health";
+                lblSecurityRightHint.Text = "Select an issue to see affected entries.";
+            }
+
+            securityIssueEntriesHost?.Controls.Clear();
+        }
+
+        private void ShowSecurityIssue(PasswordHealth.IssueKind kind)
+        {
+            if (accounts == null || securityIssueEntriesHost == null)
+            {
+                return;
+            }
+
+            activeSecurityIssue = kind;
+            var report = PasswordHealth.Analyze(accounts);
+            var entries = PasswordHealth.EntriesFor(report, kind);
+
+            lblSecurityRightTitle.Text = PasswordHealth.TitleFor(kind);
+            lblSecurityRightHint.Text = PasswordHealth.DescriptionFor(kind, entries.Count);
+
+            securityIssueEntriesHost.Controls.Clear();
+            // Dock=Top reverse order: add bottom-first so first entry appears at top.
+            for (int i = entries.Count - 1; i >= 0; i--)
+            {
+                securityIssueEntriesHost.Controls.Add(CreateSecurityIssueEntryRow(entries[i]));
+            }
+        }
+
+        private Panel CreateSecurityIssueEntryRow(Account account)
+        {
+            var badge = new ServiceBadgeControl
+            {
+                Width = 32,
+                Height = 32,
+                ServiceName = account.Service,
+                WebsiteUrl = account.Url,
+                Location = new System.Drawing.Point(0, 8)
+            };
+            var badgeHost = new Panel { Dock = DockStyle.Left, Width = 40, BackColor = AppTheme.PanelBackground };
+            badgeHost.Controls.Add(badge);
+
+            var name = new Label
+            {
+                Text = string.IsNullOrEmpty(account.Service) ? "(no service)" : account.Service,
+                Dock = DockStyle.Top,
+                Height = 20,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary
+            };
+            var user = new Label
+            {
+                Text = account.Username ?? string.Empty,
+                Dock = DockStyle.Top,
+                Height = 18,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary
+            };
+            var text = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground };
+            text.Controls.Add(user);
+            text.Controls.Add(name);
+
+            var chevron = new Label
+            {
+                Text = "›",
+                Dock = DockStyle.Right,
+                Width = 20,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+
+            var row = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = AppTheme.PanelBackground, Padding = new Padding(0, 4, 0, 4), Cursor = Cursors.Hand };
+            row.Controls.Add(text);
+            row.Controls.Add(chevron);
+            row.Controls.Add(badgeHost);
+
+            void openInVault(object s, EventArgs e)
+            {
+                ShowAllItemsView();
+                SelectNavRow(allItemsNavRow);
+                // Select the account in the grid if present.
+                foreach (DataGridViewRow gridRow in dgvAccounts.Rows)
+                {
+                    if (ReferenceEquals(gridRow.DataBoundItem, account))
+                    {
+                        gridRow.Selected = true;
+                        dgvAccounts.CurrentCell = gridRow.Cells[0];
+                        break;
+                    }
+                }
+            }
+
+            row.Click += openInVault;
+            name.Click += openInVault;
+            user.Click += openInVault;
+            chevron.Click += openInVault;
+            return row;
         }
 
         /// Builds the Settings page's middle (heading + Vault card) and right (summary)
@@ -1473,6 +1884,7 @@ namespace PasswordManager
             // that just happened.
             gridPresenter.Refresh(accounts, txtSearch.Text, showFavoritesOnly);
             UpdateEntryCountLabel();
+            RefreshSecurityHealth();
         }
 
         /// Keeps the "N entries" text under the "Your Vault" heading in sync with the
