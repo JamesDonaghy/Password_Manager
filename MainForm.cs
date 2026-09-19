@@ -1456,13 +1456,17 @@ namespace PasswordManager
             {
                 ShowAllItemsView();
                 SelectNavRow(allItemsNavRow);
-                // Select the account in the grid if present.
+
+                // MultiSelect defaults to true, so selecting without clearing leaves the
+                // first row selected and the details panel stuck on that entry.
+                dgvAccounts.ClearSelection();
                 foreach (DataGridViewRow gridRow in dgvAccounts.Rows)
                 {
                     if (ReferenceEquals(gridRow.DataBoundItem, account))
                     {
                         gridRow.Selected = true;
                         dgvAccounts.CurrentCell = gridRow.Cells[0];
+                        RefreshDetailsPanel();
                         break;
                     }
                 }
