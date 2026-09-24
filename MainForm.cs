@@ -38,6 +38,8 @@ namespace PasswordManager
         private PasswordHealth.IssueKind? activeSecurityIssue;
         private Panel settingsMiddlePanel;
         private Panel settingsRightPanel;
+        private Panel generatorMiddlePanel;
+        private Panel generatorRightPanel;
         private Panel rightDetailsPanel;
         private Label rightDetailsPlaceholder;
         private Panel detailsContentPanel;
@@ -334,15 +336,12 @@ namespace PasswordManager
                 BackColor = AppTheme.Border
             };
 
-            // All four sidebar entries below are "nav rows" built by CreateNavRow, so they
-            // all get the same purple-highlight-plus-accent-bar look and only one is ever
-            // highlighted at a time - see CreateNavRow/SelectNavRow further down. This used
-            // to be styling unique to "All Items" (a plain Button for the other three, which
-            // meant clicking them only ever showed the default focus-rectangle outline and
-            // never picked up the highlight, and "All Items" could never lose it).
+            // Sidebar nav rows share the same purple-highlight-plus-accent-bar look; only one is
+            // highlighted at a time - see CreateNavRow/SelectNavRow further down.
             this.lblSidebarAllItemsCount = new Label { Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight, Padding = new Padding(0, 0, 14, 0) };
             this.allItemsNavRow = CreateNavRow("🗂️ All Items", this.lblSidebarAllItemsCount, ShowAllItemsView);
             var btnFavorites = CreateNavRow("⭐ Favorites", null, ShowFavoritesView);
+            var btnGenerator = CreateNavRow("🔑 Generator", null, ShowGeneratorView);
             var btnSecurity = CreateNavRow("🛡️ Security", null, ShowSecurityView);
             var btnSettingsNav = CreateNavRow("⚙️ Settings", null, ShowSettingsView);
 
@@ -362,6 +361,7 @@ namespace PasswordManager
             // reference design.
             this.leftNavPanel.Controls.Add(btnSettingsNav);
             this.leftNavPanel.Controls.Add(btnSecurity);
+            this.leftNavPanel.Controls.Add(btnGenerator);
             this.leftNavPanel.Controls.Add(sectionDividerLine);
             this.leftNavPanel.Controls.Add(sectionDividerSpacer);
             this.leftNavPanel.Controls.Add(btnFavorites);
@@ -597,6 +597,10 @@ namespace PasswordManager
             this.settingsMiddlePanel.Visible = false;
             this.settingsRightPanel.Visible = false;
 
+            BuildGeneratorPage(out this.generatorMiddlePanel, out this.generatorRightPanel);
+            this.generatorMiddlePanel.Visible = false;
+            this.generatorRightPanel.Visible = false;
+
             var mainLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -610,14 +614,16 @@ namespace PasswordManager
             mainLayout.Controls.Add(this.leftNavPanel, 0, 0);
             mainLayout.Controls.Add(middlePanel, 1, 0);
             mainLayout.Controls.Add(this.rightDetailsPanel, 2, 0);
-            // Security page panels share the same two cells as the vault's middle/right
-            // panels - only one of each pair is ever Visible at a time (see ShowVaultView/
-            // ShowSecurityView), the same overlapping-panel technique already used for
-            // rightDetailsPlaceholder vs. detailsContentPanel above.
+            // Security/Settings/Generator pages share the same two cells as the vault's
+            // middle/right panels - only one of each pair is ever Visible at a time
+            // (see ShowVaultView/ShowSecurityView/ShowGeneratorView), the same overlapping-
+            // panel technique already used for rightDetailsPlaceholder vs. detailsContentPanel.
             mainLayout.Controls.Add(this.securityMiddlePanel, 1, 0);
             mainLayout.Controls.Add(this.securityRightPanel, 2, 0);
             mainLayout.Controls.Add(this.settingsMiddlePanel, 1, 0);
             mainLayout.Controls.Add(this.settingsRightPanel, 2, 0);
+            mainLayout.Controls.Add(this.generatorMiddlePanel, 1, 0);
+            mainLayout.Controls.Add(this.generatorRightPanel, 2, 0);
 
             this.Controls.Add(mainLayout);
             this.Controls.Add(this.menuStrip);
@@ -853,13 +859,15 @@ namespace PasswordManager
         }
 
         /// Switches the middle/right columns back to the vault view (grid + entry details),
-        /// hiding the Security/Settings pages' panels.
+        /// hiding the Security/Settings/Generator pages' panels.
         private void ShowVaultPanels()
         {
             securityMiddlePanel.Visible = false;
             securityRightPanel.Visible = false;
             settingsMiddlePanel.Visible = false;
             settingsRightPanel.Visible = false;
+            generatorMiddlePanel.Visible = false;
+            generatorRightPanel.Visible = false;
             middlePanel.Visible = true;
             rightDetailsPanel.Visible = true;
         }
@@ -900,6 +908,8 @@ namespace PasswordManager
             rightDetailsPanel.Visible = false;
             settingsMiddlePanel.Visible = false;
             settingsRightPanel.Visible = false;
+            generatorMiddlePanel.Visible = false;
+            generatorRightPanel.Visible = false;
             securityMiddlePanel.Visible = true;
             securityRightPanel.Visible = true;
             RefreshSecurityHealth();
@@ -914,8 +924,90 @@ namespace PasswordManager
             rightDetailsPanel.Visible = false;
             securityMiddlePanel.Visible = false;
             securityRightPanel.Visible = false;
+            generatorMiddlePanel.Visible = false;
+            generatorRightPanel.Visible = false;
             settingsMiddlePanel.Visible = true;
             settingsRightPanel.Visible = true;
+        }
+
+        /// Switches the middle/right columns to the Generator page (placeholder in Stage 1).
+        private void ShowGeneratorView()
+        {
+            middlePanel.Visible = false;
+            rightDetailsPanel.Visible = false;
+            securityMiddlePanel.Visible = false;
+            securityRightPanel.Visible = false;
+            settingsMiddlePanel.Visible = false;
+            settingsRightPanel.Visible = false;
+            generatorMiddlePanel.Visible = true;
+            generatorRightPanel.Visible = true;
+        }
+
+        /// Builds the Generator page shell: heading and placeholder content only.
+        /// Password generation UI is added in later stages.
+        private void BuildGeneratorPage(out Panel generatorMiddle, out Panel generatorRight)
+        {
+            var lblHeading = new Label
+            {
+                Text = "Generator",
+                Dock = DockStyle.Top,
+                Height = 36,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            var lblSubtitle = new Label
+            {
+                Text = "Create strong, unique passwords",
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary
+            };
+            var spacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.Background };
+
+            var lblPlaceholder = new Label
+            {
+                Text = "Password generation will appear here.",
+                Dock = DockStyle.Top,
+                Height = 40,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+
+            var content = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 12) };
+            // Dock=Top stacks reverse of add order.
+            content.Controls.Add(lblPlaceholder);
+            content.Controls.Add(spacer);
+            content.Controls.Add(lblSubtitle);
+            content.Controls.Add(lblHeading);
+
+            generatorMiddle = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background, Padding = new Padding(16, 14, 16, 0) };
+            generatorMiddle.Controls.Add(content);
+
+            var lblRightHeading = new Label
+            {
+                Text = "Generator",
+                Dock = DockStyle.Top,
+                Height = 32,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+            var lblRightHint = new Label
+            {
+                Text = "Generate secure passwords for your vault entries.",
+                Dock = DockStyle.Top,
+                Height = 48,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.TopCenter
+            };
+
+            generatorRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 20, 16, 20) };
+            generatorRight.Controls.Add(lblRightHint);
+            generatorRight.Controls.Add(lblRightHeading);
         }
 
         /// Builds the Security page: Password Health, Security Issues, and Security Settings
