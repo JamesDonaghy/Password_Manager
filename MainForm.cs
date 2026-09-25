@@ -40,6 +40,12 @@ namespace PasswordManager
         private Panel settingsRightPanel;
         private Panel generatorMiddlePanel;
         private Panel generatorRightPanel;
+        private TextBox txtGeneratedPassword;
+        private NumericUpDown nudGeneratorLength;
+        private CheckBox chkGeneratorUppercase;
+        private CheckBox chkGeneratorLowercase;
+        private CheckBox chkGeneratorDigits;
+        private CheckBox chkGeneratorSymbols;
         private Panel rightDetailsPanel;
         private Label rightDetailsPlaceholder;
         private Panel detailsContentPanel;
@@ -943,8 +949,7 @@ namespace PasswordManager
             generatorRightPanel.Visible = true;
         }
 
-        /// Builds the Generator page shell: heading and placeholder content only.
-        /// Password generation UI is added in later stages.
+        /// Builds the Generator page: password field, options (length + character sets), Generate and Copy.
         private void BuildGeneratorPage(out Panel generatorMiddle, out Panel generatorRight)
         {
             var lblHeading = new Label
@@ -966,19 +971,104 @@ namespace PasswordManager
             };
             var spacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.Background };
 
-            var lblPlaceholder = new Label
+            txtGeneratedPassword = new TextBox
             {
-                Text = "Password generation will appear here.",
-                Dock = DockStyle.Top,
-                Height = 40,
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.None,
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.TextPrimary,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 11f),
+                ReadOnly = true
+            };
+
+            var btnCopyGenerated = DialogControls.CreateInlineActionButton("Copy", 56, 26);
+            btnCopyGenerated.Click += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(txtGeneratedPassword.Text))
+                {
+                    clipboardGuard.CopyAndAutoClear(txtGeneratedPassword.Text);
+                }
+            };
+
+            var passwordRow = DialogControls.CreateBorderedFieldRow(txtGeneratedPassword, btnCopyGenerated);
+            passwordRow.Dock = DockStyle.Top;
+            passwordRow.Height = 40;
+
+            // Length
+            var lblLength = new Label
+            {
+                Text = "Length",
+                Dock = DockStyle.Left,
+                Width = 60,
                 Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary,
+                ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
+            nudGeneratorLength = new NumericUpDown
+            {
+                Minimum = PasswordGenerator.MinLength,
+                Maximum = PasswordGenerator.MaxLength,
+                Value = PasswordGenerator.DefaultLength,
+                Width = 72,
+                Font = AppTheme.Base,
+                Dock = DockStyle.Left
+            };
+            nudGeneratorLength.ValueChanged += (s, e) => RegeneratePasswordFromOptions();
+
+            var lengthRow = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = AppTheme.Background };
+            lengthRow.Controls.Add(nudGeneratorLength);
+            lengthRow.Controls.Add(lblLength);
+
+            // Character set toggles — at least one must stay on.
+            chkGeneratorUppercase = CreateGeneratorOptionCheckBox("Uppercase (A–Z)", true);
+            chkGeneratorLowercase = CreateGeneratorOptionCheckBox("Lowercase (a–z)", true);
+            chkGeneratorDigits = CreateGeneratorOptionCheckBox("Numbers (0–9)", true);
+            chkGeneratorSymbols = CreateGeneratorOptionCheckBox("Symbols (!@#$…)", true);
+
+            var optionsStack = new Panel { Dock = DockStyle.Top, Height = 32 * 4, BackColor = AppTheme.Background };
+            // Dock=Top reverse order
+            optionsStack.Controls.Add(chkGeneratorSymbols);
+            optionsStack.Controls.Add(chkGeneratorDigits);
+            optionsStack.Controls.Add(chkGeneratorLowercase);
+            optionsStack.Controls.Add(chkGeneratorUppercase);
+
+            var lblOptions = new Label
+            {
+                Text = "Include",
+                Dock = DockStyle.Top,
+                Height = 24,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft
+            };
+
+            var btnGenerate = DialogControls.CreatePrimaryButton("Generate", 120, 36);
+            btnGenerate.Dock = DockStyle.Left;
+            btnGenerate.Click += (s, e) => RegeneratePasswordFromOptions();
+
+            var buttonRow = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 44,
+                BackColor = AppTheme.Background,
+                Padding = new Padding(0, 8, 0, 0)
+            };
+            buttonRow.Controls.Add(btnGenerate);
+
+            var spacerAfterField = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background };
+            var spacerAfterLength = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background };
+            var spacerAfterOptions = new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Background };
 
             var content = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 12) };
             // Dock=Top stacks reverse of add order.
-            content.Controls.Add(lblPlaceholder);
+            content.Controls.Add(buttonRow);
+            content.Controls.Add(spacerAfterOptions);
+            content.Controls.Add(optionsStack);
+            content.Controls.Add(lblOptions);
+            content.Controls.Add(spacerAfterLength);
+            content.Controls.Add(lengthRow);
+            content.Controls.Add(spacerAfterField);
+            content.Controls.Add(passwordRow);
             content.Controls.Add(spacer);
             content.Controls.Add(lblSubtitle);
             content.Controls.Add(lblHeading);
@@ -997,9 +1087,9 @@ namespace PasswordManager
             };
             var lblRightHint = new Label
             {
-                Text = "Generate secure passwords for your vault entries.",
+                Text = "Adjust length and character types, then copy the password into a vault entry.",
                 Dock = DockStyle.Top,
-                Height = 48,
+                Height = 60,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextSecondary,
                 TextAlign = System.Drawing.ContentAlignment.TopCenter
@@ -1008,6 +1098,70 @@ namespace PasswordManager
             generatorRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 20, 16, 20) };
             generatorRight.Controls.Add(lblRightHint);
             generatorRight.Controls.Add(lblRightHeading);
+
+            RegeneratePasswordFromOptions();
+        }
+
+        private CheckBox CreateGeneratorOptionCheckBox(string text, bool isChecked)
+        {
+            var check = new CheckBox
+            {
+                Text = text,
+                Dock = DockStyle.Top,
+                Height = 28,
+                Checked = isChecked,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Background
+            };
+            check.CheckedChanged += GeneratorOption_CheckedChanged;
+            return check;
+        }
+
+        private void GeneratorOption_CheckedChanged(object sender, EventArgs e)
+        {
+            // Keep at least one character set enabled.
+            if (sender is CheckBox changed && !changed.Checked && !AnyGeneratorCharsetEnabled())
+            {
+                changed.Checked = true;
+                return;
+            }
+
+            RegeneratePasswordFromOptions();
+        }
+
+        private bool AnyGeneratorCharsetEnabled()
+        {
+            return (chkGeneratorUppercase?.Checked ?? false)
+                || (chkGeneratorLowercase?.Checked ?? false)
+                || (chkGeneratorDigits?.Checked ?? false)
+                || (chkGeneratorSymbols?.Checked ?? false);
+        }
+
+        private void RegeneratePasswordFromOptions()
+        {
+            if (txtGeneratedPassword == null || nudGeneratorLength == null)
+            {
+                return;
+            }
+
+            var options = new PasswordGenerator.Options
+            {
+                Length = (int)nudGeneratorLength.Value,
+                Uppercase = chkGeneratorUppercase?.Checked ?? true,
+                Lowercase = chkGeneratorLowercase?.Checked ?? true,
+                Digits = chkGeneratorDigits?.Checked ?? true,
+                Symbols = chkGeneratorSymbols?.Checked ?? true
+            };
+
+            try
+            {
+                txtGeneratedPassword.Text = PasswordGenerator.Generate(options);
+            }
+            catch (InvalidOperationException)
+            {
+                // No character sets — should not happen when toggles enforce one enabled.
+            }
         }
 
         /// Builds the Security page: Password Health, Security Issues, and Security Settings
