@@ -46,6 +46,19 @@ namespace PasswordManager
         private CheckBox chkGeneratorLowercase;
         private CheckBox chkGeneratorDigits;
         private CheckBox chkGeneratorSymbols;
+        private Panel generatorPasswordPanel;
+        private Panel generatorPassphrasePanel;
+        private Label btnTabPassword;
+        private Label btnTabPassphrase;
+        private Panel tabUnderlinePassword;
+        private Panel tabUnderlinePassphrase;
+        private TextBox txtGeneratedPassphrase;
+        private NumericUpDown nudPassphraseWords;
+        private CheckBox chkPassphraseCapitalize;
+        private CheckBox chkPassphraseNumbers;
+        private CheckBox chkPassphraseSpecial;
+        private Label lblGeneratorRightHeading;
+        private Label lblGeneratorRightHint;
         private Panel rightDetailsPanel;
         private Label rightDetailsPlaceholder;
         private Panel detailsContentPanel;
@@ -949,17 +962,114 @@ namespace PasswordManager
             generatorRightPanel.Visible = true;
         }
 
-        /// Builds the Generator page: password field, options (length + character sets), Generate and Copy.
+        /// Builds the Generator page with Password / Passphrase tabs.
         private void BuildGeneratorPage(out Panel generatorMiddle, out Panel generatorRight)
+        {
+            // --- Tab strip ---
+            btnTabPassword = new Label
+            {
+                Text = "Password Generator",
+                AutoSize = false,
+                Width = 160,
+                Height = 32,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.Accent,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Cursor = Cursors.Hand,
+                Location = new System.Drawing.Point(0, 0)
+            };
+            btnTabPassword.Click += (s, e) => ShowGeneratorTab(passwordTab: true);
+
+            btnTabPassphrase = new Label
+            {
+                Text = "Passphrase Generator",
+                AutoSize = false,
+                Width = 170,
+                Height = 32,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Cursor = Cursors.Hand,
+                Location = new System.Drawing.Point(170, 0)
+            };
+            btnTabPassphrase.Click += (s, e) => ShowGeneratorTab(passwordTab: false);
+
+            tabUnderlinePassword = new Panel
+            {
+                Height = 2,
+                Width = 150,
+                BackColor = AppTheme.Accent,
+                Location = new System.Drawing.Point(0, 32)
+            };
+            tabUnderlinePassphrase = new Panel
+            {
+                Height = 2,
+                Width = 160,
+                BackColor = AppTheme.Accent,
+                Location = new System.Drawing.Point(170, 32),
+                Visible = false
+            };
+
+            var tabStrip = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = AppTheme.Background };
+            tabStrip.Controls.Add(btnTabPassword);
+            tabStrip.Controls.Add(btnTabPassphrase);
+            tabStrip.Controls.Add(tabUnderlinePassword);
+            tabStrip.Controls.Add(tabUnderlinePassphrase);
+
+            var tabBottomLine = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = AppTheme.Border };
+            var spacerAfterTabs = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background };
+
+            generatorPasswordPanel = BuildPasswordGeneratorContent();
+            generatorPassphrasePanel = BuildPassphraseGeneratorContent();
+            generatorPassphrasePanel.Visible = false;
+
+            var bodyHost = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background };
+            bodyHost.Controls.Add(generatorPasswordPanel);
+            bodyHost.Controls.Add(generatorPassphrasePanel);
+
+            // Dock=Top reverse: body first (fill), then spacers/tabs on top
+            generatorMiddle = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background, Padding = new Padding(16, 14, 16, 0) };
+            generatorMiddle.Controls.Add(bodyHost);
+            generatorMiddle.Controls.Add(spacerAfterTabs);
+            generatorMiddle.Controls.Add(tabBottomLine);
+            generatorMiddle.Controls.Add(tabStrip);
+
+            lblGeneratorRightHeading = new Label
+            {
+                Text = "Password Generator",
+                Dock = DockStyle.Top,
+                Height = 32,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+            };
+            lblGeneratorRightHint = new Label
+            {
+                Text = "Adjust length and character types, then copy the password into a vault entry.",
+                Dock = DockStyle.Top,
+                Height = 80,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.TopCenter
+            };
+
+            generatorRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 20, 16, 20) };
+            generatorRight.Controls.Add(lblGeneratorRightHint);
+            generatorRight.Controls.Add(lblGeneratorRightHeading);
+
+            RegeneratePasswordFromOptions();
+            RegeneratePassphraseFromOptions();
+        }
+
+        private Panel BuildPasswordGeneratorContent()
         {
             var lblHeading = new Label
             {
-                Text = "Generator",
+                Text = "Password Generator",
                 Dock = DockStyle.Top,
-                Height = 36,
+                Height = 32,
                 Font = AppTheme.Heading,
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                ForeColor = AppTheme.TextPrimary
             };
             var lblSubtitle = new Label
             {
@@ -969,7 +1079,7 @@ namespace PasswordManager
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextSecondary
             };
-            var spacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = AppTheme.Background };
+            var spacer = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background };
 
             txtGeneratedPassword = new TextBox
             {
@@ -994,7 +1104,6 @@ namespace PasswordManager
             passwordRow.Dock = DockStyle.Top;
             passwordRow.Height = 40;
 
-            // Length
             var lblLength = new Label
             {
                 Text = "Length",
@@ -1019,14 +1128,12 @@ namespace PasswordManager
             lengthRow.Controls.Add(nudGeneratorLength);
             lengthRow.Controls.Add(lblLength);
 
-            // Character set toggles — at least one must stay on.
             chkGeneratorUppercase = CreateGeneratorOptionCheckBox("Uppercase (A–Z)", true);
             chkGeneratorLowercase = CreateGeneratorOptionCheckBox("Lowercase (a–z)", true);
             chkGeneratorDigits = CreateGeneratorOptionCheckBox("Numbers (0–9)", true);
             chkGeneratorSymbols = CreateGeneratorOptionCheckBox("Symbols (!@#$…)", true);
 
             var optionsStack = new Panel { Dock = DockStyle.Top, Height = 32 * 4, BackColor = AppTheme.Background };
-            // Dock=Top reverse order
             optionsStack.Controls.Add(chkGeneratorSymbols);
             optionsStack.Controls.Add(chkGeneratorDigits);
             optionsStack.Controls.Add(chkGeneratorLowercase);
@@ -1055,51 +1162,202 @@ namespace PasswordManager
             };
             buttonRow.Controls.Add(btnGenerate);
 
-            var spacerAfterField = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background };
-            var spacerAfterLength = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background };
-            var spacerAfterOptions = new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Background };
+            var panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background };
+            panel.Controls.Add(buttonRow);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Background });
+            panel.Controls.Add(optionsStack);
+            panel.Controls.Add(lblOptions);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
+            panel.Controls.Add(lengthRow);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
+            panel.Controls.Add(passwordRow);
+            panel.Controls.Add(spacer);
+            panel.Controls.Add(lblSubtitle);
+            panel.Controls.Add(lblHeading);
+            return panel;
+        }
 
-            var content = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 12) };
-            // Dock=Top stacks reverse of add order.
-            content.Controls.Add(buttonRow);
-            content.Controls.Add(spacerAfterOptions);
-            content.Controls.Add(optionsStack);
-            content.Controls.Add(lblOptions);
-            content.Controls.Add(spacerAfterLength);
-            content.Controls.Add(lengthRow);
-            content.Controls.Add(spacerAfterField);
-            content.Controls.Add(passwordRow);
-            content.Controls.Add(spacer);
-            content.Controls.Add(lblSubtitle);
-            content.Controls.Add(lblHeading);
-
-            generatorMiddle = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background, Padding = new Padding(16, 14, 16, 0) };
-            generatorMiddle.Controls.Add(content);
-
-            var lblRightHeading = new Label
+        private Panel BuildPassphraseGeneratorContent()
+        {
+            var lblHeading = new Label
             {
-                Text = "Generator",
+                Text = "Passphrase Generator",
                 Dock = DockStyle.Top,
                 Height = 32,
                 Font = AppTheme.Heading,
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+                ForeColor = AppTheme.TextPrimary
             };
-            var lblRightHint = new Label
+            var lblSubtitle = new Label
             {
-                Text = "Adjust length and character types, then copy the password into a vault entry.",
+                Text = "Create memorable and secure passphrases using a mix of random words.",
                 Dock = DockStyle.Top,
-                Height = 60,
+                Height = 36,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary
+            };
+
+            var lblWords = new Label
+            {
+                Text = "Words",
+                Dock = DockStyle.Left,
+                Width = 56,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            nudPassphraseWords = new NumericUpDown
+            {
+                Minimum = PassphraseGenerator.MinWordCount,
+                Maximum = PassphraseGenerator.MaxWordCount,
+                Value = PassphraseGenerator.DefaultWordCount,
+                Width = 64,
+                Font = AppTheme.Base,
+                Dock = DockStyle.Left
+            };
+            nudPassphraseWords.ValueChanged += (s, e) => RegeneratePassphraseFromOptions();
+            var lblWordsHint = new Label
+            {
+                Text = "Recommended: 4–6 words",
+                Dock = DockStyle.Left,
+                Width = 160,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextSecondary,
-                TextAlign = System.Drawing.ContentAlignment.TopCenter
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Padding = new Padding(12, 0, 0, 0)
+            };
+            var wordsRow = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = AppTheme.Background };
+            wordsRow.Controls.Add(lblWordsHint);
+            wordsRow.Controls.Add(nudPassphraseWords);
+            wordsRow.Controls.Add(lblWords);
+
+            var lblOptions = new Label
+            {
+                Text = "Options",
+                Dock = DockStyle.Top,
+                Height = 24,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft
             };
 
-            generatorRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 20, 16, 20) };
-            generatorRight.Controls.Add(lblRightHint);
-            generatorRight.Controls.Add(lblRightHeading);
+            chkPassphraseCapitalize = CreatePassphraseOptionCheckBox("Capitalize each word", true);
+            chkPassphraseNumbers = CreatePassphraseOptionCheckBox("Include numbers", true);
+            chkPassphraseSpecial = CreatePassphraseOptionCheckBox("Include special characters", true);
 
-            RegeneratePasswordFromOptions();
+            var optionsStack = new Panel { Dock = DockStyle.Top, Height = 32 * 3, BackColor = AppTheme.Background };
+            optionsStack.Controls.Add(chkPassphraseSpecial);
+            optionsStack.Controls.Add(chkPassphraseNumbers);
+            optionsStack.Controls.Add(chkPassphraseCapitalize);
+
+            var btnGenerate = DialogControls.CreatePrimaryButton("Generate Passphrase", 160, 36);
+            btnGenerate.Dock = DockStyle.Left;
+            btnGenerate.Click += (s, e) => RegeneratePassphraseFromOptions();
+            var buttonRow = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 44,
+                BackColor = AppTheme.Background,
+                Padding = new Padding(0, 8, 0, 0)
+            };
+            buttonRow.Controls.Add(btnGenerate);
+
+            txtGeneratedPassphrase = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.None,
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.TextPrimary,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 11f),
+                ReadOnly = true
+            };
+            var btnCopy = DialogControls.CreateInlineActionButton("Copy", 56, 26);
+            btnCopy.Click += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(txtGeneratedPassphrase.Text))
+                {
+                    clipboardGuard.CopyAndAutoClear(txtGeneratedPassphrase.Text);
+                }
+            };
+            var passphraseRow = DialogControls.CreateBorderedFieldRow(txtGeneratedPassphrase, btnCopy);
+            passphraseRow.Dock = DockStyle.Top;
+            passphraseRow.Height = 40;
+
+            var panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background };
+            // Dock=Top reverse order — visual top: heading, subtitle, output, words, options, generate
+            panel.Controls.Add(buttonRow);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Background });
+            panel.Controls.Add(optionsStack);
+            panel.Controls.Add(lblOptions);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
+            panel.Controls.Add(wordsRow);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
+            panel.Controls.Add(passphraseRow);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
+            panel.Controls.Add(lblSubtitle);
+            panel.Controls.Add(lblHeading);
+            return panel;
+        }
+
+        private void ShowGeneratorTab(bool passwordTab)
+        {
+            if (generatorPasswordPanel == null || generatorPassphrasePanel == null)
+            {
+                return;
+            }
+
+            generatorPasswordPanel.Visible = passwordTab;
+            generatorPassphrasePanel.Visible = !passwordTab;
+            tabUnderlinePassword.Visible = passwordTab;
+            tabUnderlinePassphrase.Visible = !passwordTab;
+            btnTabPassword.ForeColor = passwordTab ? AppTheme.Accent : AppTheme.TextSecondary;
+            btnTabPassphrase.ForeColor = passwordTab ? AppTheme.TextSecondary : AppTheme.Accent;
+
+            if (lblGeneratorRightHeading != null)
+            {
+                if (passwordTab)
+                {
+                    lblGeneratorRightHeading.Text = "Password Generator";
+                    lblGeneratorRightHint.Text = "Adjust length and character types, then copy the password into a vault entry.";
+                }
+                else
+                {
+                    lblGeneratorRightHeading.Text = "Passphrase Generator";
+                    lblGeneratorRightHint.Text = "Passphrases are longer, easier to remember, and more secure than traditional passwords. Ideal when you want strong security without a complex random string.";
+                }
+            }
+        }
+
+        private CheckBox CreatePassphraseOptionCheckBox(string text, bool isChecked)
+        {
+            var check = new CheckBox
+            {
+                Text = text,
+                Dock = DockStyle.Top,
+                Height = 28,
+                Checked = isChecked,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Background
+            };
+            check.CheckedChanged += (s, e) => RegeneratePassphraseFromOptions();
+            return check;
+        }
+
+        private void RegeneratePassphraseFromOptions()
+        {
+            if (txtGeneratedPassphrase == null || nudPassphraseWords == null)
+            {
+                return;
+            }
+
+            var options = new PassphraseGenerator.Options
+            {
+                WordCount = (int)nudPassphraseWords.Value,
+                Capitalize = chkPassphraseCapitalize?.Checked ?? true,
+                IncludeNumbers = chkPassphraseNumbers?.Checked ?? true,
+                IncludeSpecialCharacters = chkPassphraseSpecial?.Checked ?? true
+            };
+            txtGeneratedPassphrase.Text = PassphraseGenerator.Generate(options);
         }
 
         private CheckBox CreateGeneratorOptionCheckBox(string text, bool isChecked)
