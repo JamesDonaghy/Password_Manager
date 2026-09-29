@@ -73,7 +73,8 @@ namespace PasswordManager
             btnManageUsernames = CreateIconButton("👤", iconSize); // Manage suggested usernames
             btnManageUsernames.Click += BtnManageUsernames_Click;
 
-            txtPassword = new TextBox { PlaceholderText = "Password", BorderStyle = BorderStyle.FixedSingle, PasswordChar = '*', Font = AppTheme.Base };
+            // Borderless: the bordered field row supplies the outline so the eye sits inside the same box.
+            txtPassword = new TextBox { PlaceholderText = "Password", BorderStyle = BorderStyle.None, PasswordChar = '*', Font = AppTheme.Base, BackColor = AppTheme.Surface };
             txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Password", BorderStyle = BorderStyle.FixedSingle, PasswordChar = '*', Font = AppTheme.Base, Enabled = false }; // Repeat password field disabled by default
             txtUrl = new TextBox { PlaceholderText = "URL", BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
             txtNotes = new TextBox { PlaceholderText = "Notes", BorderStyle = BorderStyle.FixedSingle, Multiline = true, Font = AppTheme.Base };
@@ -198,18 +199,39 @@ namespace PasswordManager
             txtUsername.Dock = DockStyle.Fill;
             usernameRow.Controls.Add(btnManageUsernames);
 
-            // Password row: field fills remaining width, action icons to its right. Right-
-            // docked siblings render in the SAME order added (unlike Top/Left, where it's
-            // reversed) - the last one added lands flush against the true right edge - so
-            // adding left-to-right in reading order here places them correctly.
-            var passwordRow = new Panel { BackColor = AppTheme.Background };
-            passwordRow.Controls.Add(txtPassword);
-            txtPassword.Dock = DockStyle.Fill;
-            passwordRow.Controls.Add(btnTogglePasswordVisibility);
-            passwordRow.Controls.Add(btnGeneratePassword);
-            passwordRow.Controls.Add(btnToggleSymbols);
-            passwordRow.Controls.Add(btnToggleNumbers);
-            passwordRow.Controls.Add(btnToggleLengthSlider);
+            // Password row: single bordered box with the visibility control attached inside.
+            // Generation controls sit on a separate row below.
+            btnTogglePasswordVisibility.BackColor = AppTheme.Surface;
+            var passwordVisibilityTip = new ToolTip();
+            passwordVisibilityTip.SetToolTip(btnTogglePasswordVisibility, "Show password");
+            btnTogglePasswordVisibility.Tag = passwordVisibilityTip; // updated when toggled
+            var passwordRow = DialogControls.CreateBorderedFieldRow(txtPassword, btnTogglePasswordVisibility);
+
+            // Generation / option icons moved off the password field. CreateIconButton docks
+            // Right by default; clear that so FlowLayoutPanel can place them left-to-right.
+            btnGeneratePassword.Dock = DockStyle.None;
+            btnToggleSymbols.Dock = DockStyle.None;
+            btnToggleNumbers.Dock = DockStyle.None;
+            btnToggleLengthSlider.Dock = DockStyle.None;
+            btnGeneratePassword.Margin = new Padding(0, 0, 6, 0);
+            btnToggleLengthSlider.Margin = new Padding(0, 0, 6, 0);
+            btnToggleNumbers.Margin = new Padding(0, 0, 6, 0);
+            btnToggleSymbols.Margin = new Padding(0, 0, 0, 0);
+
+            var passwordActionsRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Padding = new Padding(0, 4, 0, 2),
+                Margin = new Padding(0),
+                BackColor = AppTheme.Background
+            };
+            passwordActionsRow.Controls.Add(btnGeneratePassword);
+            passwordActionsRow.Controls.Add(btnToggleLengthSlider);
+            passwordActionsRow.Controls.Add(btnToggleNumbers);
+            passwordActionsRow.Controls.Add(btnToggleSymbols);
 
             // Strength meter and length slider stay as their own small rows (fixed-size
             // controls sitting side by side) rather than the label-above-field pattern used
@@ -239,11 +261,12 @@ namespace PasswordManager
             serviceGroup.TabIndex = 0;
             usernameGroup.TabIndex = 1;
             passwordGroup.TabIndex = 2;
-            strengthPanel.TabIndex = 3;
-            lengthPanel.TabIndex = 4;
-            repeatGroup.TabIndex = 5;
-            urlGroup.TabIndex = 6;
-            notesGroup.TabIndex = 7;
+            passwordActionsRow.TabIndex = 3;
+            strengthPanel.TabIndex = 4;
+            lengthPanel.TabIndex = 5;
+            repeatGroup.TabIndex = 6;
+            urlGroup.TabIndex = 7;
+            notesGroup.TabIndex = 8;
             txtService.TabIndex = 0;
             txtUsername.TabIndex = 0;
             txtPassword.TabIndex = 0;
@@ -293,6 +316,7 @@ namespace PasswordManager
             contentScroll.Controls.Add(repeatGroup);
             contentScroll.Controls.Add(lengthPanel);
             contentScroll.Controls.Add(strengthPanel);
+            contentScroll.Controls.Add(passwordActionsRow);
             contentScroll.Controls.Add(passwordGroup);
             contentScroll.Controls.Add(usernameGroup);
             contentScroll.Controls.Add(serviceGroup);
@@ -341,10 +365,14 @@ namespace PasswordManager
 
         private void BtnTogglePasswordVisibility_Click(object sender, EventArgs e)
         {
-            isPasswordVisible = !isPasswordVisible; // Toggle visibility state
-            txtPassword.PasswordChar = isPasswordVisible ? '\0' : '*'; // Show or hide password
-            txtRepeatPassword.PasswordChar = isPasswordVisible ? '\0' : '*'; // Show or hide repeat password
-            btnTogglePasswordVisibility.Text = isPasswordVisible ? "🙈" : "👁️"; // Update button icon
+            isPasswordVisible = !isPasswordVisible;
+            txtPassword.PasswordChar = isPasswordVisible ? '\0' : '*';
+            txtRepeatPassword.PasswordChar = isPasswordVisible ? '\0' : '*';
+            btnTogglePasswordVisibility.Text = isPasswordVisible ? "🙈" : "👁️";
+            if (btnTogglePasswordVisibility.Tag is ToolTip tip)
+            {
+                tip.SetToolTip(btnTogglePasswordVisibility, isPasswordVisible ? "Hide password" : "Show password");
+            }
         }
 
         private void BtnToggleSymbols_Click(object sender, EventArgs e)
