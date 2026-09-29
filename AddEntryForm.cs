@@ -16,6 +16,7 @@ namespace PasswordManager
         private TextBox txtUrl; // New URL field
         private TextBox txtNotes;
         private Button btnGeneratePassword;
+        private Button btnRegeneratePassword;
         private Button btnTogglePasswordVisibility;
         private Button btnManageUsernames; // Opens the curated username suggestions list
         private Button btnSave;
@@ -40,6 +41,8 @@ namespace PasswordManager
         private bool includeSymbols = true; // Track inclusion of symbols
         private bool includeNumbers = true; // Track inclusion of numbers
         private bool isGeneratedPassword = false; // Track if using a generated password
+        /// Last type chosen from the Generate menu (used by Regenerate later).
+        private bool lastGeneratedWasPassphrase = false;
 
         public AddEntryForm(Account existingAccount = null)
         {
@@ -149,9 +152,33 @@ namespace PasswordManager
                 contentScroll.AutoScroll = true; // Re-enable as the safety net, now evaluated against the final size
             };
 
-            // Create buttons for password actions with matching sizes
-            btnGeneratePassword = CreateIconButton("🔄", iconSize); // Generate icon
+            // Generate menu: choose password or passphrase, then fill the field immediately.
+            btnGeneratePassword = DialogControls.CreateSecondaryButton("Generate ▾", 100, iconSize);
+            btnRegeneratePassword = CreateIconButton("🔄", iconSize);
+            btnRegeneratePassword.Dock = DockStyle.None;
+            var regenerateTip = new ToolTip();
+            regenerateTip.SetToolTip(btnRegeneratePassword, "Regenerate");
+            btnRegeneratePassword.Click += (s, e) =>
+            {
+                if (lastGeneratedWasPassphrase)
+                {
+                    ApplyGeneratedPassphrase();
+                }
+                else
+                {
+                    ApplyGeneratedPassword();
+                }
+            };
             btnTogglePasswordVisibility = CreateIconButton("👁️", iconSize); // Eye icon
+
+            var generateMenu = new ContextMenuStrip();
+            generateMenu.Font = AppTheme.Base;
+            generateMenu.Items.Add("Password", null, (s, e) => ApplyGeneratedPassword());
+            generateMenu.Items.Add("Passphrase", null, (s, e) => ApplyGeneratedPassphrase());
+            btnGeneratePassword.Click += (s, e) =>
+            {
+                generateMenu.Show(btnGeneratePassword, new System.Drawing.Point(0, btnGeneratePassword.Height));
+            };
 
             // Save/Cancel as proper labeled buttons instead of emoji-only icons, matching
             // the reference apps' dialog buttons. Uses the shared primary/secondary button
@@ -182,7 +209,6 @@ namespace PasswordManager
             lblStrengthText = new Label { AutoSize = true, Font = AppTheme.Base, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(8, 4, 0, 0) };
 
             // Add event handlers
-            btnGeneratePassword.Click += BtnGeneratePassword_Click;
             btnTogglePasswordVisibility.Click += BtnTogglePasswordVisibility_Click; // Do not clear repeat password
             btnSave.Click += BtnSave_Click; // Clear repeat password
             btnCancel.Click += (sender, e) => this.Close(); // Clear repeat password
@@ -210,10 +236,12 @@ namespace PasswordManager
             // Generation / option icons moved off the password field. CreateIconButton docks
             // Right by default; clear that so FlowLayoutPanel can place them left-to-right.
             btnGeneratePassword.Dock = DockStyle.None;
+            btnRegeneratePassword.Dock = DockStyle.None;
             btnToggleSymbols.Dock = DockStyle.None;
             btnToggleNumbers.Dock = DockStyle.None;
             btnToggleLengthSlider.Dock = DockStyle.None;
             btnGeneratePassword.Margin = new Padding(0, 0, 6, 0);
+            btnRegeneratePassword.Margin = new Padding(0, 0, 6, 0);
             btnToggleLengthSlider.Margin = new Padding(0, 0, 6, 0);
             btnToggleNumbers.Margin = new Padding(0, 0, 6, 0);
             btnToggleSymbols.Margin = new Padding(0, 0, 0, 0);
@@ -229,6 +257,7 @@ namespace PasswordManager
                 BackColor = AppTheme.Background
             };
             passwordActionsRow.Controls.Add(btnGeneratePassword);
+            passwordActionsRow.Controls.Add(btnRegeneratePassword);
             passwordActionsRow.Controls.Add(btnToggleLengthSlider);
             passwordActionsRow.Controls.Add(btnToggleNumbers);
             passwordActionsRow.Controls.Add(btnToggleSymbols);
@@ -277,6 +306,7 @@ namespace PasswordManager
             // so Tab moves field-to-field instead of stopping on every toolbar icon.
             btnManageUsernames.TabStop = false;
             btnGeneratePassword.TabStop = false;
+            btnRegeneratePassword.TabStop = false;
             btnTogglePasswordVisibility.TabStop = false;
             btnToggleSymbols.TabStop = false;
             btnToggleNumbers.TabStop = false;
@@ -355,12 +385,27 @@ namespace PasswordManager
             txtService.Focus();
         }
 
-        private void BtnGeneratePassword_Click(object sender, EventArgs e)
+        /// Fills the password field from the current password settings (length / numbers / symbols).
+        private void ApplyGeneratedPassword()
         {
-            RegeneratePassword(); // Call the new method to generate password
-            isGeneratedPassword = true; // Set flag to indicate generated password
-            txtRepeatPassword.Enabled = false; // Disable repeat password textbox
-            ClearRepeatPassword(); // Clear repeat password textbox
+            lastGeneratedWasPassphrase = false;
+            RegeneratePassword();
+            MarkFieldAsGenerated();
+        }
+
+        /// Fills the password field with a passphrase using default PassphraseGenerator options.
+        private void ApplyGeneratedPassphrase()
+        {
+            lastGeneratedWasPassphrase = true;
+            txtPassword.Text = PassphraseGenerator.Generate(new PassphraseGenerator.Options());
+            MarkFieldAsGenerated();
+        }
+
+        private void MarkFieldAsGenerated()
+        {
+            isGeneratedPassword = true;
+            txtRepeatPassword.Enabled = false;
+            ClearRepeatPassword();
         }
 
         private void BtnTogglePasswordVisibility_Click(object sender, EventArgs e)
