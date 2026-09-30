@@ -9,6 +9,8 @@ namespace PasswordManager
 {
     public class AddEntryForm : Form
     {
+        private const int GenerationSettingsHeight = 110;
+
         private TextBox txtService;
         private ComboBox txtUsername;
         private TextBox txtPassword;
@@ -17,15 +19,24 @@ namespace PasswordManager
         private TextBox txtNotes;
         private Button btnGeneratePassword;
         private Button btnRegeneratePassword;
+        private Button btnGenerationSettings;
         private Button btnTogglePasswordVisibility;
+        private Panel generationSettingsPanel;
         private Button btnManageUsernames; // Opens the curated username suggestions list
         private Button btnSave;
         private Button btnCancel;
-        private Button btnToggleSymbols; // Button for symbols
-        private Button btnToggleNumbers; // Button for numbers
-        private Button btnToggleLengthSlider; // Toggle button for the length slider
         private TrackBar sliderPasswordLength; // Slider for password length
         private Label lblCurrentLength; // Label to show current length
+        private CheckBox chkUppercase;
+        private CheckBox chkLowercase;
+        private CheckBox chkNumbers;
+        private CheckBox chkSymbols;
+        private Panel passwordSettingsContent;
+        private Panel passphraseSettingsContent;
+        private NumericUpDown nudPassphraseWords;
+        private CheckBox chkPassphraseCapitalize;
+        private CheckBox chkPassphraseNumbers;
+        private CheckBox chkPassphraseSpecial;
         private Panel pnlStrengthBarContainer;
         private Panel pnlStrengthBarFill;
         private Label lblStrengthText;
@@ -38,8 +49,6 @@ namespace PasswordManager
         public string Url { get; private set; } // URL property
 
         private bool isPasswordVisible = false; // Track visibility state
-        private bool includeSymbols = true; // Track inclusion of symbols
-        private bool includeNumbers = true; // Track inclusion of numbers
         private bool isGeneratedPassword = false; // Track if using a generated password
         /// Last type chosen from the Generate menu (used by Regenerate later).
         private bool lastGeneratedWasPassphrase = false;
@@ -60,15 +69,6 @@ namespace PasswordManager
             const int inputHeight = 30;
             const int iconSize = 30;
 
-            // The length slider row (TrackBar + label) is only added to the layout once,
-            // but its Visible starts false so it takes no space initially. When toggled on,
-            // the dialog needs to grow by roughly this much or the extra content pushes the
-            // total past the window's fixed height, which trips the AutoScroll safety net's
-            // scrollbar - and that scrollbar eats width from the row above it, squeezing the
-            // password field's icon buttons (reported in review). Growing the window itself
-            // instead avoids that, and avoids permanently reserving the space when hidden.
-            const int lengthRowHeight = 55;
-
             txtService = new TextBox { PlaceholderText = "Service Name", BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
             txtUsername = new ComboBox { Font = AppTheme.Base, DropDownStyle = ComboBoxStyle.DropDown };
             RefreshUsernameSuggestions(); // Builds suggestions from UsernameSuggestionsStore
@@ -82,74 +82,35 @@ namespace PasswordManager
             txtUrl = new TextBox { PlaceholderText = "URL", BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
             txtNotes = new TextBox { PlaceholderText = "Notes", BorderStyle = BorderStyle.FixedSingle, Multiline = true, Font = AppTheme.Base };
 
-            // Password length slider
-            lblCurrentLength = new Label { Text = "15", Dock = DockStyle.Left, Width = 30, Font = AppTheme.Base, ForeColor = AppTheme.TextPrimary, Visible = false }; // Label to show current length, initially hidden
+            // Password length slider (lives inside the generation settings panel).
+            lblCurrentLength = new Label
+            {
+                Text = PasswordGenerator.DefaultLength.ToString(),
+                AutoSize = false,
+                Width = 30,
+                Height = 24,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
             sliderPasswordLength = new TrackBar
             {
-                Minimum = 6,
-                Maximum = 20,
-                Value = 15,
-                Dock = DockStyle.Top,
+                Minimum = PasswordGenerator.MinLength,
+                Maximum = PasswordGenerator.MaxLength,
+                Value = PasswordGenerator.DefaultLength,
                 Height = 45,
-                TickFrequency = 1,
+                TickFrequency = 4,
                 LargeChange = 1,
                 SmallChange = 1,
-                Width = 300, // Make the slider wider
-                Visible = false // Initially hidden
+                Width = 280
             };
             sliderPasswordLength.Scroll += (s, e) =>
             {
-                lblCurrentLength.Text = sliderPasswordLength.Value.ToString(); // Update current length label
-                RegeneratePassword(); // Regenerate password when slider changes
-            };
-
-            // Toggle button for showing/hiding the length slider with an icon. Styled the
-            // same as the other icon buttons rather than the previous one-off LightBlue -
-            // it's a "show more options" disclosure, not an on/off state like symbols/numbers,
-            // so it doesn't get their active/inactive treatment.
-            btnToggleLengthSlider = CreateIconButton("🔧", iconSize);
-            btnToggleLengthSlider.Click += (sender, e) =>
-            {
-                bool willShow = !sliderPasswordLength.Visible;
-
-                // SuspendLayout/ResumeLayout batches the resize and the visibility change
-                // into a single layout pass, but that alone didn't stop the flicker
-                // (reported in review): AutoScroll's scrollbar decision is made as PART of
-                // that batched layout pass, evaluated against whatever the content height
-                // happens to be at that instant - so it can still momentarily decide a
-                // scrollbar is needed before the Form has actually finished growing.
-                //
-                // Turning AutoScroll off for the duration removes the scrollbar calculation
-                // entirely, so there's nothing to flash. It's switched back on only once the
-                // Form is already at its final size, so contentScroll's one-and-only
-                // evaluation happens against the correct height and (in the normal case)
-                // never needs a scrollbar at all.
-                this.SuspendLayout();
-                contentScroll.SuspendLayout();
-                contentScroll.AutoScroll = false;
-
-                if (willShow)
+                lblCurrentLength.Text = sliderPasswordLength.Value.ToString();
+                if (!lastGeneratedWasPassphrase)
                 {
-                    this.Height += lengthRowHeight;
+                    RegeneratePassword();
                 }
-
-                sliderPasswordLength.Visible = willShow;
-
-                // Only show current length label when slider is visible
-                lblCurrentLength.Visible = willShow;
-                if (willShow)
-                {
-                    lblCurrentLength.Text = sliderPasswordLength.Value.ToString(); // Show the current length when the slider is displayed
-                }
-
-                if (!willShow)
-                {
-                    this.Height -= lengthRowHeight;
-                }
-
-                contentScroll.ResumeLayout(true);
-                this.ResumeLayout(true);
-                contentScroll.AutoScroll = true; // Re-enable as the safety net, now evaluated against the final size
             };
 
             // Generate menu: choose password or passphrase, then fill the field immediately.
@@ -169,6 +130,13 @@ namespace PasswordManager
                     ApplyGeneratedPassword();
                 }
             };
+
+            btnGenerationSettings = CreateIconButton("⚙", iconSize);
+            btnGenerationSettings.Dock = DockStyle.None;
+            var settingsTip = new ToolTip();
+            settingsTip.SetToolTip(btnGenerationSettings, "Generation settings");
+            btnGenerationSettings.Click += (s, e) => ToggleGenerationSettings();
+
             btnTogglePasswordVisibility = CreateIconButton("👁️", iconSize); // Eye icon
 
             var generateMenu = new ContextMenuStrip();
@@ -185,15 +153,6 @@ namespace PasswordManager
             // helpers (DialogControls) so later dialogs reuse this exact same look.
             btnSave = DialogControls.CreatePrimaryButton("Save", 96, 32);
             btnCancel = DialogControls.CreateSecondaryButton("Cancel", 96, 32);
-
-            // Buttons for symbols and numbers - active/inactive now shown via the theme's
-            // accent tint instead of ad-hoc LightGreen/LightCoral, and set to match their
-            // actual starting state (includeSymbols/includeNumbers both default true) rather
-            // than only updating on the first click as before.
-            btnToggleSymbols = CreateIconButton("⚙️", iconSize); // Gear icon for symbols
-            btnToggleSymbols.BackColor = AppTheme.AccentSubtle;
-            btnToggleNumbers = CreateIconButton("🔢", iconSize); // Numbers icon
-            btnToggleNumbers.BackColor = AppTheme.AccentSubtle;
 
             // Password strength meter: a bordered bar that fills proportionally and changes
             // color, paired with a text label since color alone isn't accessible to everyone.
@@ -212,8 +171,6 @@ namespace PasswordManager
             btnTogglePasswordVisibility.Click += BtnTogglePasswordVisibility_Click; // Do not clear repeat password
             btnSave.Click += BtnSave_Click; // Clear repeat password
             btnCancel.Click += (sender, e) => this.Close(); // Clear repeat password
-            btnToggleSymbols.Click += BtnToggleSymbols_Click; // Event for symbols toggle button
-            btnToggleNumbers.Click += BtnToggleNumbers_Click; // Event for numbers toggle button
 
             // Adding manual entry detection
             txtPassword.TextChanged += TxtPassword_TextChanged; // Update strength when password changes
@@ -233,18 +190,13 @@ namespace PasswordManager
             btnTogglePasswordVisibility.Tag = passwordVisibilityTip; // updated when toggled
             var passwordRow = DialogControls.CreateBorderedFieldRow(txtPassword, btnTogglePasswordVisibility);
 
-            // Generation / option icons moved off the password field. CreateIconButton docks
-            // Right by default; clear that so FlowLayoutPanel can place them left-to-right.
+            // Action buttons: Generate, Regenerate, Settings. Character options live in the settings panel.
             btnGeneratePassword.Dock = DockStyle.None;
             btnRegeneratePassword.Dock = DockStyle.None;
-            btnToggleSymbols.Dock = DockStyle.None;
-            btnToggleNumbers.Dock = DockStyle.None;
-            btnToggleLengthSlider.Dock = DockStyle.None;
+            btnGenerationSettings.Dock = DockStyle.None;
             btnGeneratePassword.Margin = new Padding(0, 0, 6, 0);
             btnRegeneratePassword.Margin = new Padding(0, 0, 6, 0);
-            btnToggleLengthSlider.Margin = new Padding(0, 0, 6, 0);
-            btnToggleNumbers.Margin = new Padding(0, 0, 6, 0);
-            btnToggleSymbols.Margin = new Padding(0, 0, 0, 0);
+            btnGenerationSettings.Margin = new Padding(0, 0, 0, 0);
 
             var passwordActionsRow = new FlowLayoutPanel
             {
@@ -252,26 +204,173 @@ namespace PasswordManager
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
-                Padding = new Padding(0, 4, 0, 2),
+                // Extra bottom padding so Settings actions sit a bit above the length row.
+                Padding = new Padding(0, 4, 0, 10),
                 Margin = new Padding(0),
                 BackColor = AppTheme.Background
             };
             passwordActionsRow.Controls.Add(btnGeneratePassword);
             passwordActionsRow.Controls.Add(btnRegeneratePassword);
-            passwordActionsRow.Controls.Add(btnToggleLengthSlider);
-            passwordActionsRow.Controls.Add(btnToggleNumbers);
-            passwordActionsRow.Controls.Add(btnToggleSymbols);
+            passwordActionsRow.Controls.Add(btnGenerationSettings);
 
-            // Strength meter and length slider stay as their own small rows (fixed-size
-            // controls sitting side by side) rather than the label-above-field pattern used
-            // for the real inputs - a FlowLayoutPanel is the simplest fit for that shape.
+            // --- Password settings content (length + charset) ---
+            chkUppercase = CreatePasswordOptionCheckBox("Uppercase", true);
+            chkLowercase = CreatePasswordOptionCheckBox("Lowercase", true);
+            chkNumbers = CreatePasswordOptionCheckBox("Numbers", true);
+            chkSymbols = CreatePasswordOptionCheckBox("Symbols", true);
+
+            var optionsGrid = new TableLayoutPanel
+            {
+                AutoSize = true,
+                ColumnCount = 2,
+                RowCount = 2,
+                BackColor = AppTheme.Background
+            };
+            optionsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            optionsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            optionsGrid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            optionsGrid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            optionsGrid.Controls.Add(chkUppercase, 0, 0);
+            optionsGrid.Controls.Add(chkLowercase, 1, 0);
+            optionsGrid.Controls.Add(chkNumbers, 0, 1);
+            optionsGrid.Controls.Add(chkSymbols, 1, 1);
+
+            var optionsHost = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 54,
+                Padding = new Padding(0, 0, 0, 0),
+                BackColor = AppTheme.Background
+            };
+            optionsHost.Controls.Add(optionsGrid);
+            optionsHost.Resize += (s, e) =>
+            {
+                optionsGrid.Left = Math.Max(0, (optionsHost.ClientSize.Width - optionsGrid.Width) / 2);
+                optionsGrid.Top = Math.Max(0, (optionsHost.ClientSize.Height - optionsGrid.Height) / 2);
+            };
+
+            var lengthRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Padding = new Padding(0, 2, 0, 0),
+                Margin = new Padding(0),
+                BackColor = AppTheme.Background
+            };
+            var lblLengthCaption = new Label
+            {
+                Text = "Length",
+                AutoSize = false,
+                Width = 52,
+                Height = 24,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            lengthRow.Controls.Add(lblLengthCaption);
+            lengthRow.Controls.Add(sliderPasswordLength);
+            lengthRow.Controls.Add(lblCurrentLength);
+
+            passwordSettingsContent = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppTheme.Background
+            };
+            passwordSettingsContent.Controls.Add(optionsHost);
+            passwordSettingsContent.Controls.Add(lengthRow);
+
+            // --- Passphrase settings content (words + options) ---
+            nudPassphraseWords = new NumericUpDown
+            {
+                Minimum = PassphraseGenerator.MinWordCount,
+                Maximum = PassphraseGenerator.MaxWordCount,
+                Value = PassphraseGenerator.DefaultWordCount,
+                Width = 64,
+                Font = AppTheme.Base
+            };
+            nudPassphraseWords.ValueChanged += (s, e) =>
+            {
+                if (lastGeneratedWasPassphrase && isGeneratedPassword)
+                {
+                    ApplyGeneratedPassphrase();
+                }
+            };
+
+            var wordsRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Padding = new Padding(0, 2, 0, 0),
+                Margin = new Padding(0),
+                BackColor = AppTheme.Background
+            };
+            wordsRow.Controls.Add(new Label
+            {
+                Text = "Words",
+                AutoSize = false,
+                Width = 52,
+                Height = 24,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            });
+            wordsRow.Controls.Add(nudPassphraseWords);
+
+            chkPassphraseCapitalize = CreatePassphraseOptionCheckBox("Capitalize", true);
+            chkPassphraseNumbers = CreatePassphraseOptionCheckBox("Numbers", true);
+            chkPassphraseSpecial = CreatePassphraseOptionCheckBox("Hyphens", true);
+
+            var passphraseOptionsGrid = new TableLayoutPanel
+            {
+                AutoSize = true,
+                ColumnCount = 3,
+                RowCount = 1,
+                BackColor = AppTheme.Background
+            };
+            passphraseOptionsGrid.Controls.Add(chkPassphraseCapitalize, 0, 0);
+            passphraseOptionsGrid.Controls.Add(chkPassphraseNumbers, 1, 0);
+            passphraseOptionsGrid.Controls.Add(chkPassphraseSpecial, 2, 0);
+
+            var passphraseOptionsHost = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 36,
+                BackColor = AppTheme.Background
+            };
+            passphraseOptionsHost.Controls.Add(passphraseOptionsGrid);
+            passphraseOptionsHost.Resize += (s, e) =>
+            {
+                passphraseOptionsGrid.Left = Math.Max(0, (passphraseOptionsHost.ClientSize.Width - passphraseOptionsGrid.Width) / 2);
+                passphraseOptionsGrid.Top = Math.Max(0, (passphraseOptionsHost.ClientSize.Height - passphraseOptionsGrid.Height) / 2);
+            };
+
+            passphraseSettingsContent = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Visible = false,
+                BackColor = AppTheme.Background
+            };
+            passphraseSettingsContent.Controls.Add(passphraseOptionsHost);
+            passphraseSettingsContent.Controls.Add(wordsRow);
+
+            generationSettingsPanel = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = GenerationSettingsHeight,
+                Visible = false,
+                Padding = new Padding(0, 4, 0, 0),
+                BackColor = AppTheme.Background
+            };
+            generationSettingsPanel.Controls.Add(passwordSettingsContent);
+            generationSettingsPanel.Controls.Add(passphraseSettingsContent);
+
             var strengthPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 2, 0, 2), Margin = new Padding(0), BackColor = AppTheme.Background };
             strengthPanel.Controls.Add(pnlStrengthBarContainer);
             strengthPanel.Controls.Add(lblStrengthText);
-
-            var lengthPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 0, 0, 4), Margin = new Padding(0), BackColor = AppTheme.Background };
-            lengthPanel.Controls.Add(sliderPasswordLength); // Add slider for password length
-            lengthPanel.Controls.Add(lblCurrentLength); // Add current length label
 
             // Each real input gets its own full-width row with a caption above it (matching
             // the reference apps), replacing the old half-width Service+Username and
@@ -291,8 +390,8 @@ namespace PasswordManager
             usernameGroup.TabIndex = 1;
             passwordGroup.TabIndex = 2;
             passwordActionsRow.TabIndex = 3;
-            strengthPanel.TabIndex = 4;
-            lengthPanel.TabIndex = 5;
+            generationSettingsPanel.TabIndex = 4;
+            strengthPanel.TabIndex = 5;
             repeatGroup.TabIndex = 6;
             urlGroup.TabIndex = 7;
             notesGroup.TabIndex = 8;
@@ -307,10 +406,8 @@ namespace PasswordManager
             btnManageUsernames.TabStop = false;
             btnGeneratePassword.TabStop = false;
             btnRegeneratePassword.TabStop = false;
+            btnGenerationSettings.TabStop = false;
             btnTogglePasswordVisibility.TabStop = false;
-            btnToggleSymbols.TabStop = false;
-            btnToggleNumbers.TabStop = false;
-            btnToggleLengthSlider.TabStop = false;
             sliderPasswordLength.TabStop = false;
 
             var lblFormTitle = new Label
@@ -344,8 +441,8 @@ namespace PasswordManager
             contentScroll.Controls.Add(notesGroup);
             contentScroll.Controls.Add(urlGroup);
             contentScroll.Controls.Add(repeatGroup);
-            contentScroll.Controls.Add(lengthPanel);
             contentScroll.Controls.Add(strengthPanel);
+            contentScroll.Controls.Add(generationSettingsPanel);
             contentScroll.Controls.Add(passwordActionsRow);
             contentScroll.Controls.Add(passwordGroup);
             contentScroll.Controls.Add(usernameGroup);
@@ -385,20 +482,96 @@ namespace PasswordManager
             txtService.Focus();
         }
 
+        private void ToggleGenerationSettings()
+        {
+            if (generationSettingsPanel == null)
+            {
+                return;
+            }
+
+            bool willShow = !generationSettingsPanel.Visible;
+
+            SuspendLayout();
+            contentScroll.SuspendLayout();
+            contentScroll.AutoScroll = false;
+
+            if (willShow)
+            {
+                Height += GenerationSettingsHeight;
+                UpdateGenerationSettingsMode();
+            }
+
+            generationSettingsPanel.Visible = willShow;
+            btnGenerationSettings.BackColor = willShow ? AppTheme.AccentSubtle : AppTheme.PanelBackground;
+
+            if (!willShow)
+            {
+                Height -= GenerationSettingsHeight;
+            }
+
+            contentScroll.ResumeLayout(true);
+            ResumeLayout(true);
+            contentScroll.AutoScroll = true;
+        }
+
+        /// Shows password or passphrase options based on the last Generate menu choice.
+        private void UpdateGenerationSettingsMode()
+        {
+            if (passwordSettingsContent == null || passphraseSettingsContent == null)
+            {
+                return;
+            }
+
+            passwordSettingsContent.Visible = !lastGeneratedWasPassphrase;
+            passphraseSettingsContent.Visible = lastGeneratedWasPassphrase;
+        }
+
         /// Fills the password field from the current password settings (length / numbers / symbols).
         private void ApplyGeneratedPassword()
         {
             lastGeneratedWasPassphrase = false;
+            UpdateGenerationSettingsMode();
             RegeneratePassword();
             MarkFieldAsGenerated();
         }
 
-        /// Fills the password field with a passphrase using default PassphraseGenerator options.
+        /// Fills the password field with a passphrase using the current passphrase settings.
         private void ApplyGeneratedPassphrase()
         {
             lastGeneratedWasPassphrase = true;
-            txtPassword.Text = PassphraseGenerator.Generate(new PassphraseGenerator.Options());
+            UpdateGenerationSettingsMode();
+
+            var options = new PassphraseGenerator.Options
+            {
+                WordCount = (int)(nudPassphraseWords?.Value ?? PassphraseGenerator.DefaultWordCount),
+                Capitalize = chkPassphraseCapitalize?.Checked ?? true,
+                IncludeNumbers = chkPassphraseNumbers?.Checked ?? true,
+                IncludeSpecialCharacters = chkPassphraseSpecial?.Checked ?? true
+            };
+            txtPassword.Text = PassphraseGenerator.Generate(options);
             MarkFieldAsGenerated();
+        }
+
+        private CheckBox CreatePassphraseOptionCheckBox(string text, bool isChecked)
+        {
+            var check = new CheckBox
+            {
+                Text = text,
+                AutoSize = true,
+                Checked = isChecked,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Background,
+                Margin = new Padding(8, 2, 8, 2)
+            };
+            check.CheckedChanged += (s, e) =>
+            {
+                if (lastGeneratedWasPassphrase && isGeneratedPassword)
+                {
+                    ApplyGeneratedPassphrase();
+                }
+            };
+            return check;
         }
 
         private void MarkFieldAsGenerated()
@@ -420,22 +593,44 @@ namespace PasswordManager
             }
         }
 
-        private void BtnToggleSymbols_Click(object sender, EventArgs e)
+        private CheckBox CreatePasswordOptionCheckBox(string text, bool isChecked)
         {
-            includeSymbols = !includeSymbols; // Toggle symbols inclusion
-            btnToggleSymbols.BackColor = includeSymbols ? AppTheme.AccentSubtle : AppTheme.PanelBackground;
-
-            RegeneratePassword(); // Regenerate password when toggling symbols
-            ClearRepeatPassword(); // Clear repeat password textbox
+            var check = new CheckBox
+            {
+                Text = text,
+                AutoSize = true,
+                Checked = isChecked,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Background,
+                Margin = new Padding(8, 2, 8, 2)
+            };
+            check.CheckedChanged += PasswordOption_CheckedChanged;
+            return check;
         }
 
-        private void BtnToggleNumbers_Click(object sender, EventArgs e)
+        private void PasswordOption_CheckedChanged(object sender, EventArgs e)
         {
-            includeNumbers = !includeNumbers; // Toggle numbers inclusion
-            btnToggleNumbers.BackColor = includeNumbers ? AppTheme.AccentSubtle : AppTheme.PanelBackground;
+            // Keep at least one character set enabled.
+            if (sender is CheckBox changed && !changed.Checked && !AnyPasswordCharsetEnabled())
+            {
+                changed.Checked = true;
+                return;
+            }
 
-            RegeneratePassword(); // Regenerate password when toggling numbers
-            ClearRepeatPassword(); // Clear repeat password textbox
+            if (!lastGeneratedWasPassphrase && isGeneratedPassword)
+            {
+                RegeneratePassword();
+                MarkFieldAsGenerated();
+            }
+        }
+
+        private bool AnyPasswordCharsetEnabled()
+        {
+            return (chkUppercase?.Checked ?? false)
+                || (chkLowercase?.Checked ?? false)
+                || (chkNumbers?.Checked ?? false)
+                || (chkSymbols?.Checked ?? false);
         }
 
         private void TxtPassword_TextChanged(object sender, EventArgs e)
@@ -538,37 +733,28 @@ namespace PasswordManager
 
         private void RegeneratePassword()
         {
-            int length = sliderPasswordLength.Value; // Get the length from the slider
-            txtPassword.Text = GenerateRandomPassword(length); // Generate a password of selected length
-            txtRepeatPassword.Enabled = false; // Disable repeat password textbox when regenerating
-            isGeneratedPassword = true; // Set flag to indicate generated password
-            txtRepeatPassword.BackColor = AppTheme.Surface; // Reset colour
-        }
-
-        private string GenerateRandomPassword(int length)
-        {
-            const string letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            const string numbers = "1234567890";
-            const string symbols = "!@#$%^&*()";
-
-            StringBuilder validChars = new StringBuilder(letters);
-            if (includeNumbers)
-                validChars.Append(numbers);
-            if (includeSymbols)
-                validChars.Append(symbols);
-
-            StringBuilder result = new StringBuilder();
-            for (int i = 0; i < length; i++)
+            var options = new PasswordGenerator.Options
             {
-                // RandomNumberGenerator.GetInt32 is the modern replacement for
-                // RNGCryptoServiceProvider (now obsolete). It's also unbiased: the previous
-                // "random byte % validChars.Length" approach slightly favored characters
-                // near the start of validChars, since 256 doesn't divide evenly into most
-                // charset lengths. GetInt32 picks uniformly from [0, validChars.Length).
-                int index = RandomNumberGenerator.GetInt32(validChars.Length);
-                result.Append(validChars[index]);
+                Length = sliderPasswordLength?.Value ?? PasswordGenerator.DefaultLength,
+                Uppercase = chkUppercase?.Checked ?? true,
+                Lowercase = chkLowercase?.Checked ?? true,
+                Digits = chkNumbers?.Checked ?? true,
+                Symbols = chkSymbols?.Checked ?? true
+            };
+
+            try
+            {
+                txtPassword.Text = PasswordGenerator.Generate(options);
             }
-            return result.ToString();
+            catch (InvalidOperationException)
+            {
+                // No character sets selected — prevented by the checkbox handler.
+                return;
+            }
+
+            txtRepeatPassword.Enabled = false;
+            isGeneratedPassword = true;
+            txtRepeatPassword.BackColor = AppTheme.Surface;
         }
 
         private void BtnManageUsernames_Click(object sender, EventArgs e)
