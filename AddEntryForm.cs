@@ -9,7 +9,8 @@ namespace PasswordManager
 {
     public class AddEntryForm : Form
     {
-        private const int GenerationSettingsHeight = 110;
+        private const int GenerationSettingsCollapsedHeight = 34;
+        private const int GenerationSettingsExpandedHeight = 290;
 
         private TextBox txtService;
         private ComboBox txtUsername;
@@ -64,7 +65,7 @@ namespace PasswordManager
             // rather than leaving a large buffer below Notes - the content area is still
             // scrollable as a safety net in case any platform/DPI combination needs a
             // little more room than expected, rather than fields ever getting clipped.
-            this.Size = new System.Drawing.Size(440, 560);
+            this.Size = new System.Drawing.Size(460, 640);
 
             const int inputHeight = 30;
             const int iconSize = 30;
@@ -113,28 +114,26 @@ namespace PasswordManager
                 }
             };
 
-            // Generate menu: choose password or passphrase, then fill the field immediately.
-            btnGeneratePassword = DialogControls.CreateSecondaryButton("Generate ▾", 100, iconSize);
-            btnRegeneratePassword = CreateIconButton("🔄", iconSize);
-            btnRegeneratePassword.Dock = DockStyle.None;
-            var regenerateTip = new ToolTip();
-            regenerateTip.SetToolTip(btnRegeneratePassword, "Regenerate");
-            btnRegeneratePassword.Click += (s, e) =>
-            {
-                if (lastGeneratedWasPassphrase)
-                {
-                    ApplyGeneratedPassphrase();
-                }
-                else
-                {
-                    ApplyGeneratedPassword();
-                }
-            };
+            // Generate sits beside the password field (primary button + dropdown menu).
+            btnGeneratePassword = DialogControls.CreatePrimaryButton("Generate ▾", 110, iconSize);
+            btnGeneratePassword.Dock = DockStyle.None;
 
-            btnGenerationSettings = CreateIconButton("⚙", iconSize);
-            btnGenerationSettings.Dock = DockStyle.None;
-            var settingsTip = new ToolTip();
-            settingsTip.SetToolTip(btnGenerationSettings, "Generation settings");
+            // Header control for the collapsible Generation Options container.
+            btnGenerationSettings = new Button
+            {
+                Text = "▸  Generation Options (optional)",
+                FlatStyle = FlatStyle.Flat,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Height = 32,
+                Dock = DockStyle.Top,
+                Cursor = Cursors.Hand,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(8, 0, 0, 0)
+            };
+            btnGenerationSettings.FlatAppearance.BorderSize = 0;
+            btnGenerationSettings.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
             btnGenerationSettings.Click += (s, e) => ToggleGenerationSettings();
 
             btnTogglePasswordVisibility = CreateIconButton("👁️", iconSize); // Eye icon
@@ -151,8 +150,12 @@ namespace PasswordManager
             // Save/Cancel as proper labeled buttons instead of emoji-only icons, matching
             // the reference apps' dialog buttons. Uses the shared primary/secondary button
             // helpers (DialogControls) so later dialogs reuse this exact same look.
-            btnSave = DialogControls.CreatePrimaryButton("Save", 96, 32);
+            // Primary action is "Add" for new entries; switched to "Save" when editing.
+            btnSave = DialogControls.CreatePrimaryButton("Add", 96, 32);
             btnCancel = DialogControls.CreateSecondaryButton("Cancel", 96, 32);
+
+            var generateTip = new ToolTip();
+            generateTip.SetToolTip(btnGeneratePassword, "Generate password or passphrase");
 
             // Password strength meter: a bordered bar that fills proportionally and changes
             // color, paired with a text label since color alone isn't accessible to everyone.
@@ -182,103 +185,90 @@ namespace PasswordManager
             txtUsername.Dock = DockStyle.Fill;
             usernameRow.Controls.Add(btnManageUsernames);
 
-            // Password row: single bordered box with the visibility control attached inside.
-            // Generation controls sit on a separate row below.
+            // Password row: [ bordered field + eye ] [ Generate ▾ ]
             btnTogglePasswordVisibility.BackColor = AppTheme.Surface;
             var passwordVisibilityTip = new ToolTip();
             passwordVisibilityTip.SetToolTip(btnTogglePasswordVisibility, "Show password");
-            btnTogglePasswordVisibility.Tag = passwordVisibilityTip; // updated when toggled
-            var passwordRow = DialogControls.CreateBorderedFieldRow(txtPassword, btnTogglePasswordVisibility);
+            btnTogglePasswordVisibility.Tag = passwordVisibilityTip;
+            var passwordFieldBox = DialogControls.CreateBorderedFieldRow(txtPassword, btnTogglePasswordVisibility);
+            passwordFieldBox.Dock = DockStyle.Fill;
 
-            // Action buttons: Generate, Regenerate, Settings. Character options live in the settings panel.
-            btnGeneratePassword.Dock = DockStyle.None;
-            btnRegeneratePassword.Dock = DockStyle.None;
-            btnGenerationSettings.Dock = DockStyle.None;
-            btnGeneratePassword.Margin = new Padding(0, 0, 6, 0);
-            btnRegeneratePassword.Margin = new Padding(0, 0, 6, 0);
-            btnGenerationSettings.Margin = new Padding(0, 0, 0, 0);
+            btnGeneratePassword.Margin = new Padding(8, 0, 0, 0);
+            var passwordRow = new Panel { BackColor = AppTheme.Background };
+            passwordRow.Controls.Add(passwordFieldBox);
+            // Right-dock Generate so the field fills remaining width.
+            btnGeneratePassword.Dock = DockStyle.Right;
+            passwordRow.Controls.Add(btnGeneratePassword);
 
-            var passwordActionsRow = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                // Extra bottom padding so Settings actions sit a bit above the length row.
-                Padding = new Padding(0, 4, 0, 10),
-                Margin = new Padding(0),
-                BackColor = AppTheme.Background
-            };
-            passwordActionsRow.Controls.Add(btnGeneratePassword);
-            passwordActionsRow.Controls.Add(btnRegeneratePassword);
-            passwordActionsRow.Controls.Add(btnGenerationSettings);
-
-            // --- Password settings content (length + charset) ---
-            chkUppercase = CreatePasswordOptionCheckBox("Uppercase", true);
-            chkLowercase = CreatePasswordOptionCheckBox("Lowercase", true);
-            chkNumbers = CreatePasswordOptionCheckBox("Numbers", true);
-            chkSymbols = CreatePasswordOptionCheckBox("Symbols", true);
+            // --- Password settings content (length + character types) ---
+            chkUppercase = CreatePasswordOptionCheckBox("Uppercase (A–Z)", true);
+            chkLowercase = CreatePasswordOptionCheckBox("Lowercase (a–z)", true);
+            chkNumbers = CreatePasswordOptionCheckBox("Numbers (0–9)", true);
+            chkSymbols = CreatePasswordOptionCheckBox("Symbols (!@#…)", true);
 
             var optionsGrid = new TableLayoutPanel
             {
-                AutoSize = true,
+                Dock = DockStyle.Top,
+                Height = 64,
                 ColumnCount = 2,
                 RowCount = 2,
-                BackColor = AppTheme.Background
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(0, 2, 0, 2)
             };
-            optionsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            optionsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            optionsGrid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            optionsGrid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            optionsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            optionsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            optionsGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30f));
+            optionsGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30f));
             optionsGrid.Controls.Add(chkUppercase, 0, 0);
-            optionsGrid.Controls.Add(chkLowercase, 1, 0);
-            optionsGrid.Controls.Add(chkNumbers, 0, 1);
+            optionsGrid.Controls.Add(chkNumbers, 1, 0);
+            optionsGrid.Controls.Add(chkLowercase, 0, 1);
             optionsGrid.Controls.Add(chkSymbols, 1, 1);
 
-            var optionsHost = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 54,
-                Padding = new Padding(0, 0, 0, 0),
-                BackColor = AppTheme.Background
-            };
-            optionsHost.Controls.Add(optionsGrid);
-            optionsHost.Resize += (s, e) =>
-            {
-                optionsGrid.Left = Math.Max(0, (optionsHost.ClientSize.Width - optionsGrid.Width) / 2);
-                optionsGrid.Top = Math.Max(0, (optionsHost.ClientSize.Height - optionsGrid.Height) / 2);
-            };
-
+            sliderPasswordLength.Width = 220;
+            sliderPasswordLength.Height = 36;
+            sliderPasswordLength.BackColor = AppTheme.Surface;
             var lengthRow = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
-                Padding = new Padding(0, 2, 0, 0),
+                Padding = new Padding(0, 4, 0, 4),
                 Margin = new Padding(0),
-                BackColor = AppTheme.Background
+                BackColor = AppTheme.Surface
             };
-            var lblLengthCaption = new Label
+            lengthRow.Controls.Add(new Label
             {
                 Text = "Length",
                 AutoSize = false,
                 Width = 52,
-                Height = 24,
+                Height = 28,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
-            };
-            lengthRow.Controls.Add(lblLengthCaption);
+            });
             lengthRow.Controls.Add(sliderPasswordLength);
             lengthRow.Controls.Add(lblCurrentLength);
+
+            var lblCharacterTypes = new Label
+            {
+                Text = "Character Types",
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 8.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                BackColor = AppTheme.Surface
+            };
 
             passwordSettingsContent = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = AppTheme.Background
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(0, 4, 0, 0)
             };
-            passwordSettingsContent.Controls.Add(optionsHost);
+            passwordSettingsContent.Controls.Add(optionsGrid);
+            passwordSettingsContent.Controls.Add(lblCharacterTypes);
             passwordSettingsContent.Controls.Add(lengthRow);
 
             // --- Passphrase settings content (words + options) ---
@@ -304,71 +294,151 @@ namespace PasswordManager
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
-                Padding = new Padding(0, 2, 0, 0),
+                Padding = new Padding(0, 4, 0, 4),
                 Margin = new Padding(0),
-                BackColor = AppTheme.Background
+                BackColor = AppTheme.Surface
             };
             wordsRow.Controls.Add(new Label
             {
                 Text = "Words",
                 AutoSize = false,
                 Width = 52,
-                Height = 24,
+                Height = 28,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             });
             wordsRow.Controls.Add(nudPassphraseWords);
 
-            chkPassphraseCapitalize = CreatePassphraseOptionCheckBox("Capitalize", true);
-            chkPassphraseNumbers = CreatePassphraseOptionCheckBox("Numbers", true);
-            chkPassphraseSpecial = CreatePassphraseOptionCheckBox("Hyphens", true);
+            chkPassphraseCapitalize = CreatePassphraseOptionCheckBox("Capitalize each word", true);
+            chkPassphraseNumbers = CreatePassphraseOptionCheckBox("Include numbers", true);
+            chkPassphraseSpecial = CreatePassphraseOptionCheckBox("Use hyphens", true);
 
-            var passphraseOptionsGrid = new TableLayoutPanel
-            {
-                AutoSize = true,
-                ColumnCount = 3,
-                RowCount = 1,
-                BackColor = AppTheme.Background
-            };
-            passphraseOptionsGrid.Controls.Add(chkPassphraseCapitalize, 0, 0);
-            passphraseOptionsGrid.Controls.Add(chkPassphraseNumbers, 1, 0);
-            passphraseOptionsGrid.Controls.Add(chkPassphraseSpecial, 2, 0);
-
-            var passphraseOptionsHost = new Panel
+            var passphraseOptionsStack = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 36,
-                BackColor = AppTheme.Background
+                Height = 96,
+                BackColor = AppTheme.Surface
             };
-            passphraseOptionsHost.Controls.Add(passphraseOptionsGrid);
-            passphraseOptionsHost.Resize += (s, e) =>
-            {
-                passphraseOptionsGrid.Left = Math.Max(0, (passphraseOptionsHost.ClientSize.Width - passphraseOptionsGrid.Width) / 2);
-                passphraseOptionsGrid.Top = Math.Max(0, (passphraseOptionsHost.ClientSize.Height - passphraseOptionsGrid.Height) / 2);
-            };
+            chkPassphraseCapitalize.Dock = DockStyle.Top;
+            chkPassphraseNumbers.Dock = DockStyle.Top;
+            chkPassphraseSpecial.Dock = DockStyle.Top;
+            chkPassphraseCapitalize.Height = 28;
+            chkPassphraseNumbers.Height = 28;
+            chkPassphraseSpecial.Height = 28;
+            // Dock=Top reverse add order
+            passphraseOptionsStack.Controls.Add(chkPassphraseSpecial);
+            passphraseOptionsStack.Controls.Add(chkPassphraseNumbers);
+            passphraseOptionsStack.Controls.Add(chkPassphraseCapitalize);
 
             passphraseSettingsContent = new Panel
             {
                 Dock = DockStyle.Fill,
                 Visible = false,
-                BackColor = AppTheme.Background
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(0, 4, 0, 0)
             };
-            passphraseSettingsContent.Controls.Add(passphraseOptionsHost);
+            passphraseSettingsContent.Controls.Add(passphraseOptionsStack);
             passphraseSettingsContent.Controls.Add(wordsRow);
 
+            // Mode switch: Password | Passphrase (inside the options container).
+            var btnModePassword = DialogControls.CreateSecondaryButton("Password", 100, 28);
+            var btnModePassphrase = DialogControls.CreateSecondaryButton("Passphrase", 100, 28);
+            btnModePassword.Margin = new Padding(0, 0, 6, 0);
+            btnModePassphrase.Margin = new Padding(0, 0, 0, 0);
+            void SyncModeButtons()
+            {
+                btnModePassword.BackColor = !lastGeneratedWasPassphrase ? AppTheme.AccentSubtle : AppTheme.PanelBackground;
+                btnModePassphrase.BackColor = lastGeneratedWasPassphrase ? AppTheme.AccentSubtle : AppTheme.PanelBackground;
+            }
+            btnModePassword.Click += (s, e) =>
+            {
+                lastGeneratedWasPassphrase = false;
+                UpdateGenerationSettingsMode();
+                SyncModeButtons();
+            };
+            btnModePassphrase.Click += (s, e) =>
+            {
+                lastGeneratedWasPassphrase = true;
+                UpdateGenerationSettingsMode();
+                SyncModeButtons();
+            };
+            SyncModeButtons();
+
+            var modeRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                Padding = new Padding(0, 4, 0, 8),
+                BackColor = AppTheme.Surface
+            };
+            modeRow.Controls.Add(btnModePassword);
+            modeRow.Controls.Add(btnModePassphrase);
+
+            // Footer action: Regenerate only (Use / save-settings can come later).
+            btnRegeneratePassword = DialogControls.CreateSecondaryButton("Regenerate", 100, 28);
+            btnRegeneratePassword.Click += (s, e) =>
+            {
+                if (lastGeneratedWasPassphrase)
+                {
+                    ApplyGeneratedPassphrase();
+                }
+                else
+                {
+                    ApplyGeneratedPassword();
+                }
+            };
+
+            var footerRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                AutoSize = true,
+                FlowDirection = FlowDirection.RightToLeft,
+                Padding = new Padding(0, 8, 0, 0),
+                BackColor = AppTheme.Surface
+            };
+            footerRow.Controls.Add(btnRegeneratePassword);
+
+            var settingsBodyHost = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppTheme.Surface
+            };
+            settingsBodyHost.Controls.Add(passwordSettingsContent);
+            settingsBodyHost.Controls.Add(passphraseSettingsContent);
+
+            var generationBody = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(12, 8, 12, 10),
+                BackColor = AppTheme.Surface,
+                Visible = false,
+                AutoScroll = false
+            };
+            // Dock order: mode (top), settings (fill), footer (bottom)
+            generationBody.Controls.Add(settingsBodyHost);
+            generationBody.Controls.Add(footerRow);
+            generationBody.Controls.Add(modeRow);
+
+            // Bordered collapsible container — collapsed shows header only.
             generationSettingsPanel = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = GenerationSettingsHeight,
-                Visible = false,
-                Padding = new Padding(0, 4, 0, 0),
-                BackColor = AppTheme.Background
+                Height = GenerationSettingsCollapsedHeight,
+                Padding = new Padding(1),
+                BackColor = AppTheme.Border
             };
-            generationSettingsPanel.Controls.Add(passwordSettingsContent);
-            generationSettingsPanel.Controls.Add(passphraseSettingsContent);
+            var generationInset = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppTheme.Surface
+            };
+            generationInset.Controls.Add(generationBody);
+            generationInset.Controls.Add(btnGenerationSettings);
+            generationSettingsPanel.Controls.Add(generationInset);
 
-            var strengthPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 2, 0, 2), Margin = new Padding(0), BackColor = AppTheme.Background };
+            var strengthPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 6, 0, 8), Margin = new Padding(0), BackColor = AppTheme.Background };
             strengthPanel.Controls.Add(pnlStrengthBarContainer);
             strengthPanel.Controls.Add(lblStrengthText);
 
@@ -389,12 +459,11 @@ namespace PasswordManager
             serviceGroup.TabIndex = 0;
             usernameGroup.TabIndex = 1;
             passwordGroup.TabIndex = 2;
-            passwordActionsRow.TabIndex = 3;
+            strengthPanel.TabIndex = 3;
             generationSettingsPanel.TabIndex = 4;
-            strengthPanel.TabIndex = 5;
-            repeatGroup.TabIndex = 6;
-            urlGroup.TabIndex = 7;
-            notesGroup.TabIndex = 8;
+            repeatGroup.TabIndex = 5;
+            urlGroup.TabIndex = 6;
+            notesGroup.TabIndex = 7;
             txtService.TabIndex = 0;
             txtUsername.TabIndex = 0;
             txtPassword.TabIndex = 0;
@@ -438,12 +507,12 @@ namespace PasswordManager
             // Add controls to the scrollable body in the correct order. Same-Dock-style
             // controls stack in the REVERSE of the order added (last added ends up closest
             // to the top edge) - confirmed the hard way in MainForm a few sessions back.
+            // Dock=Top reverse: last added is top. Order: service → … → password → strength → options → repeat…
             contentScroll.Controls.Add(notesGroup);
             contentScroll.Controls.Add(urlGroup);
             contentScroll.Controls.Add(repeatGroup);
-            contentScroll.Controls.Add(strengthPanel);
             contentScroll.Controls.Add(generationSettingsPanel);
-            contentScroll.Controls.Add(passwordActionsRow);
+            contentScroll.Controls.Add(strengthPanel);
             contentScroll.Controls.Add(passwordGroup);
             contentScroll.Controls.Add(usernameGroup);
             contentScroll.Controls.Add(serviceGroup);
@@ -466,6 +535,7 @@ namespace PasswordManager
             {
                 Text = "Edit Entry";
                 lblFormTitle.Text = "Edit Entry";
+                btnSave.Text = "Save";
                 txtService.Text = existingAccount.Service;
                 txtUsername.Text = existingAccount.Username;
                 txtUrl.Text = existingAccount.Url;
@@ -484,29 +554,52 @@ namespace PasswordManager
 
         private void ToggleGenerationSettings()
         {
-            if (generationSettingsPanel == null)
+            if (generationSettingsPanel == null || btnGenerationSettings == null)
             {
                 return;
             }
 
-            bool willShow = !generationSettingsPanel.Visible;
+            // Body is the Fill panel under the header inside the bordered container.
+            Panel body = null;
+            if (btnGenerationSettings.Parent != null)
+            {
+                foreach (Control child in btnGenerationSettings.Parent.Controls)
+                {
+                    if (child != btnGenerationSettings && child is Panel p)
+                    {
+                        body = p;
+                        break;
+                    }
+                }
+            }
+
+            if (body == null)
+            {
+                return;
+            }
+
+            bool willShow = !body.Visible;
 
             SuspendLayout();
             contentScroll.SuspendLayout();
             contentScroll.AutoScroll = false;
 
+            int expandDelta = GenerationSettingsExpandedHeight - GenerationSettingsCollapsedHeight;
+
             if (willShow)
             {
-                Height += GenerationSettingsHeight;
+                generationSettingsPanel.Height = GenerationSettingsExpandedHeight;
+                Height += expandDelta;
+                body.Visible = true;
+                btnGenerationSettings.Text = "▾  Generation Options (optional)";
                 UpdateGenerationSettingsMode();
             }
-
-            generationSettingsPanel.Visible = willShow;
-            btnGenerationSettings.BackColor = willShow ? AppTheme.AccentSubtle : AppTheme.PanelBackground;
-
-            if (!willShow)
+            else
             {
-                Height -= GenerationSettingsHeight;
+                body.Visible = false;
+                generationSettingsPanel.Height = GenerationSettingsCollapsedHeight;
+                Height -= expandDelta;
+                btnGenerationSettings.Text = "▸  Generation Options (optional)";
             }
 
             contentScroll.ResumeLayout(true);
@@ -561,8 +654,9 @@ namespace PasswordManager
                 Checked = isChecked,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextPrimary,
-                BackColor = AppTheme.Background,
-                Margin = new Padding(8, 2, 8, 2)
+                BackColor = AppTheme.Surface,
+                Margin = new Padding(4, 4, 4, 4),
+                Height = 28
             };
             check.CheckedChanged += (s, e) =>
             {
@@ -602,8 +696,8 @@ namespace PasswordManager
                 Checked = isChecked,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextPrimary,
-                BackColor = AppTheme.Background,
-                Margin = new Padding(8, 2, 8, 2)
+                BackColor = AppTheme.Surface,
+                Margin = new Padding(4, 4, 12, 4)
             };
             check.CheckedChanged += PasswordOption_CheckedChanged;
             return check;
