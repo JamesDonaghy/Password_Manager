@@ -84,9 +84,10 @@ namespace PasswordManager
             txtNotes = new TextBox { PlaceholderText = "Notes", BorderStyle = BorderStyle.FixedSingle, Multiline = true, Font = AppTheme.Base };
 
             // Password length slider (lives inside the generation settings panel).
+            int savedLength = Math.Clamp(AppPreferences.PasswordLength, PasswordGenerator.MinLength, PasswordGenerator.MaxLength);
             lblCurrentLength = new Label
             {
-                Text = PasswordGenerator.DefaultLength.ToString(),
+                Text = savedLength.ToString(),
                 AutoSize = false,
                 Width = 30,
                 Height = 24,
@@ -98,7 +99,7 @@ namespace PasswordManager
             {
                 Minimum = PasswordGenerator.MinLength,
                 Maximum = PasswordGenerator.MaxLength,
-                Value = PasswordGenerator.DefaultLength,
+                Value = savedLength,
                 Height = 45,
                 TickFrequency = 4,
                 LargeChange = 1,
@@ -200,11 +201,11 @@ namespace PasswordManager
             btnGeneratePassword.Dock = DockStyle.Right;
             passwordRow.Controls.Add(btnGeneratePassword);
 
-            // --- Password settings content (length + character types) ---
-            chkUppercase = CreatePasswordOptionCheckBox("Uppercase (A–Z)", true);
-            chkLowercase = CreatePasswordOptionCheckBox("Lowercase (a–z)", true);
-            chkNumbers = CreatePasswordOptionCheckBox("Numbers (0–9)", true);
-            chkSymbols = CreatePasswordOptionCheckBox("Symbols (!@#…)", true);
+            // --- Password settings content (length + character types) — seeded from saved prefs ---
+            chkUppercase = CreatePasswordOptionCheckBox("Uppercase (A–Z)", AppPreferences.PasswordUppercase);
+            chkLowercase = CreatePasswordOptionCheckBox("Lowercase (a–z)", AppPreferences.PasswordLowercase);
+            chkNumbers = CreatePasswordOptionCheckBox("Numbers (0–9)", AppPreferences.PasswordDigits);
+            chkSymbols = CreatePasswordOptionCheckBox("Symbols (!@#…)", AppPreferences.PasswordSymbols);
 
             var optionsGrid = new TableLayoutPanel
             {
@@ -272,11 +273,15 @@ namespace PasswordManager
             passwordSettingsContent.Controls.Add(lengthRow);
 
             // --- Passphrase settings content (words + options) ---
+            int savedWordCount = Math.Clamp(
+                AppPreferences.PassphraseWordCount,
+                PassphraseGenerator.MinWordCount,
+                PassphraseGenerator.MaxWordCount);
             nudPassphraseWords = new NumericUpDown
             {
                 Minimum = PassphraseGenerator.MinWordCount,
                 Maximum = PassphraseGenerator.MaxWordCount,
-                Value = PassphraseGenerator.DefaultWordCount,
+                Value = savedWordCount,
                 Width = 64,
                 Font = AppTheme.Base
             };
@@ -310,9 +315,9 @@ namespace PasswordManager
             });
             wordsRow.Controls.Add(nudPassphraseWords);
 
-            chkPassphraseCapitalize = CreatePassphraseOptionCheckBox("Capitalize each word", true);
-            chkPassphraseNumbers = CreatePassphraseOptionCheckBox("Include numbers", true);
-            chkPassphraseSpecial = CreatePassphraseOptionCheckBox("Use hyphens", true);
+            chkPassphraseCapitalize = CreatePassphraseOptionCheckBox("Capitalize each word", AppPreferences.PassphraseCapitalize);
+            chkPassphraseNumbers = CreatePassphraseOptionCheckBox("Include numbers", AppPreferences.PassphraseNumbers);
+            chkPassphraseSpecial = CreatePassphraseOptionCheckBox("Use hyphens", AppPreferences.PassphraseSpecial);
 
             var passphraseOptionsStack = new Panel
             {
@@ -376,8 +381,9 @@ namespace PasswordManager
             modeRow.Controls.Add(btnModePassword);
             modeRow.Controls.Add(btnModePassphrase);
 
-            // Footer action: Regenerate only (Use / save-settings can come later).
-            btnRegeneratePassword = DialogControls.CreateSecondaryButton("Regenerate", 100, 28);
+            // Footer: Save (persist options) + Regenerate — same height, right-aligned pair.
+            const int footerButtonHeight = 30;
+            btnRegeneratePassword = DialogControls.CreateSecondaryButton("Regenerate", 100, footerButtonHeight);
             btnRegeneratePassword.Click += (s, e) =>
             {
                 if (lastGeneratedWasPassphrase)
@@ -390,15 +396,25 @@ namespace PasswordManager
                 }
             };
 
-            var footerRow = new FlowLayoutPanel
+            var btnSaveGenerationSettings = DialogControls.CreatePrimaryButton("Save", 80, footerButtonHeight);
+            btnSaveGenerationSettings.Click += (s, e) => SaveGenerationPreferences();
+            var saveSettingsTip = new ToolTip();
+            saveSettingsTip.SetToolTip(btnSaveGenerationSettings, "Save generation options for next time");
+
+            var footerRow = new Panel
             {
                 Dock = DockStyle.Bottom,
-                AutoSize = true,
-                FlowDirection = FlowDirection.RightToLeft,
+                Height = footerButtonHeight + 12,
                 Padding = new Padding(0, 8, 0, 0),
                 BackColor = AppTheme.Surface
             };
+            // Right-dock order: last added sits outermost right → add Save last.
+            btnRegeneratePassword.Dock = DockStyle.Right;
+            btnSaveGenerationSettings.Dock = DockStyle.Right;
+            var footerGap = new Panel { Dock = DockStyle.Right, Width = 8, BackColor = AppTheme.Surface };
             footerRow.Controls.Add(btnRegeneratePassword);
+            footerRow.Controls.Add(footerGap);
+            footerRow.Controls.Add(btnSaveGenerationSettings);
 
             var settingsBodyHost = new Panel
             {
@@ -617,6 +633,27 @@ namespace PasswordManager
 
             passwordSettingsContent.Visible = !lastGeneratedWasPassphrase;
             passphraseSettingsContent.Visible = lastGeneratedWasPassphrase;
+        }
+
+        /// Writes current panel options to AppPreferences so future Generate uses them.
+        private void SaveGenerationPreferences()
+        {
+            AppPreferences.SaveGenerationOptions(
+                length: sliderPasswordLength?.Value ?? AppPreferences.PasswordLength,
+                uppercase: chkUppercase?.Checked ?? true,
+                lowercase: chkLowercase?.Checked ?? true,
+                digits: chkNumbers?.Checked ?? true,
+                symbols: chkSymbols?.Checked ?? true,
+                wordCount: (int)(nudPassphraseWords?.Value ?? AppPreferences.PassphraseWordCount),
+                capitalizeWords: chkPassphraseCapitalize?.Checked ?? true,
+                includeNumbers: chkPassphraseNumbers?.Checked ?? true,
+                includeSpecial: chkPassphraseSpecial?.Checked ?? true);
+
+            MessageBox.Show(
+                "Generation options saved. Generate will use these settings next time.",
+                "Preferences Saved",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
         }
 
         /// Fills the password field from the current password settings (length / numbers / symbols).
