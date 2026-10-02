@@ -67,21 +67,31 @@ namespace PasswordManager
             // little more room than expected, rather than fields ever getting clipped.
             this.Size = new System.Drawing.Size(460, 640);
 
-            const int inputHeight = 30;
-            const int iconSize = 30;
+            const int inputHeight = 36;
+            const int iconSize = 32;
 
-            txtService = new TextBox { PlaceholderText = "Service Name", BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
-            txtUsername = new ComboBox { Font = AppTheme.Base, DropDownStyle = ComboBoxStyle.DropDown };
+            // Borderless inputs — bordered field rows supply the outline (matches password field).
+            txtService = new TextBox { PlaceholderText = "Service Name", BorderStyle = BorderStyle.None, Font = AppTheme.Base, BackColor = AppTheme.Surface };
+            // Flat + taller item height so the dropdown control better matches the bordered row.
+            txtUsername = new ComboBox
+            {
+                Font = AppTheme.Base,
+                DropDownStyle = ComboBoxStyle.DropDown,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = AppTheme.Surface,
+                IntegralHeight = false,
+                ItemHeight = 22
+            };
             RefreshUsernameSuggestions(); // Builds suggestions from UsernameSuggestionsStore
 
             btnManageUsernames = CreateIconButton("👤", iconSize); // Manage suggested usernames
+            btnManageUsernames.BackColor = AppTheme.Surface;
             btnManageUsernames.Click += BtnManageUsernames_Click;
 
-            // Borderless: the bordered field row supplies the outline so the eye sits inside the same box.
             txtPassword = new TextBox { PlaceholderText = "Password", BorderStyle = BorderStyle.None, PasswordChar = '*', Font = AppTheme.Base, BackColor = AppTheme.Surface };
-            txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Password", BorderStyle = BorderStyle.FixedSingle, PasswordChar = '*', Font = AppTheme.Base, Enabled = false }; // Repeat password field disabled by default
-            txtUrl = new TextBox { PlaceholderText = "URL", BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
-            txtNotes = new TextBox { PlaceholderText = "Notes", BorderStyle = BorderStyle.FixedSingle, Multiline = true, Font = AppTheme.Base };
+            txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Password", BorderStyle = BorderStyle.None, PasswordChar = '*', Font = AppTheme.Base, BackColor = AppTheme.Surface, Enabled = false };
+            txtUrl = new TextBox { PlaceholderText = "URL", BorderStyle = BorderStyle.None, Font = AppTheme.Base, BackColor = AppTheme.Surface };
+            txtNotes = new TextBox { PlaceholderText = "Notes", BorderStyle = BorderStyle.None, Multiline = true, Font = AppTheme.Base, BackColor = AppTheme.Surface };
 
             // Password length slider (lives inside the generation settings panel).
             int savedLength = Math.Clamp(AppPreferences.PasswordLength, PasswordGenerator.MinLength, PasswordGenerator.MaxLength);
@@ -129,8 +139,9 @@ namespace PasswordManager
                 Dock = DockStyle.Top,
                 Cursor = Cursors.Hand,
                 Font = AppTheme.Base,
-                ForeColor = AppTheme.TextPrimary,
-                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.Accent,
+                // Same soft grey as details-panel Copy/Show (PanelBackground).
+                BackColor = AppTheme.PanelBackground,
                 Padding = new Padding(8, 0, 0, 0)
             };
             btnGenerationSettings.FlatAppearance.BorderSize = 0;
@@ -138,6 +149,21 @@ namespace PasswordManager
             btnGenerationSettings.Click += (s, e) => ToggleGenerationSettings();
 
             btnTogglePasswordVisibility = CreateIconButton("👁️", iconSize); // Eye icon
+            var btnRegenerateInField = CreateIconButton("🔄", iconSize);
+            btnRegenerateInField.BackColor = AppTheme.Surface;
+            var regenInFieldTip = new ToolTip();
+            regenInFieldTip.SetToolTip(btnRegenerateInField, "Regenerate");
+            btnRegenerateInField.Click += (s, e) =>
+            {
+                if (lastGeneratedWasPassphrase)
+                {
+                    ApplyGeneratedPassphrase();
+                }
+                else
+                {
+                    ApplyGeneratedPassword();
+                }
+            };
 
             var generateMenu = new ContextMenuStrip();
             generateMenu.Font = AppTheme.Base;
@@ -180,18 +206,29 @@ namespace PasswordManager
             txtPassword.TextChanged += TxtPassword_TextChanged; // Update strength when password changes
             txtRepeatPassword.TextChanged += TxtRepeatPassword_TextChanged; // Check match on repeat password text change
 
-            // Username row: field fills remaining width, manage-usernames button to its right.
-            var usernameRow = new Panel { BackColor = AppTheme.Background };
-            usernameRow.Controls.Add(txtUsername);
-            txtUsername.Dock = DockStyle.Fill;
-            usernameRow.Controls.Add(btnManageUsernames);
+            // Username row: bordered field + manage-usernames control inside the box.
+            btnManageUsernames.BackColor = AppTheme.Surface;
+            var usernameRow = DialogControls.CreateBorderedFieldRow(txtUsername, btnManageUsernames);
+            // Keep the combo stretched to the full bordered-row height (native arrow scales better when taller).
+            usernameRow.Layout += (s, e) =>
+            {
+                if (txtUsername.Parent != null)
+                {
+                    int target = Math.Max(txtUsername.PreferredHeight, txtUsername.Parent.ClientSize.Height - 2);
+                    if (txtUsername.Height != target)
+                    {
+                        txtUsername.Height = target;
+                    }
+                }
+            };
 
-            // Password row: [ bordered field + eye ] [ Generate ▾ ]
+            // Password row: [ bordered field + regenerate + eye ] [ Generate ▾ ]
             btnTogglePasswordVisibility.BackColor = AppTheme.Surface;
             var passwordVisibilityTip = new ToolTip();
             passwordVisibilityTip.SetToolTip(btnTogglePasswordVisibility, "Show password");
             btnTogglePasswordVisibility.Tag = passwordVisibilityTip;
-            var passwordFieldBox = DialogControls.CreateBorderedFieldRow(txtPassword, btnTogglePasswordVisibility);
+            // Trailing buttons: last added is outermost right → eye on the far right.
+            var passwordFieldBox = DialogControls.CreateBorderedFieldRow(txtPassword, btnRegenerateInField, btnTogglePasswordVisibility);
             passwordFieldBox.Dock = DockStyle.Fill;
 
             btnGeneratePassword.Margin = new Padding(8, 0, 0, 0);
@@ -336,6 +373,17 @@ namespace PasswordManager
             passphraseOptionsStack.Controls.Add(chkPassphraseNumbers);
             passphraseOptionsStack.Controls.Add(chkPassphraseCapitalize);
 
+            var lblPassphraseOptions = new Label
+            {
+                Text = "Options",
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 8.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                BackColor = AppTheme.Surface
+            };
+
             passphraseSettingsContent = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -343,43 +391,96 @@ namespace PasswordManager
                 BackColor = AppTheme.Surface,
                 Padding = new Padding(0, 4, 0, 0)
             };
+            // Dock=Top reverse: options stack, subtitle, words
             passphraseSettingsContent.Controls.Add(passphraseOptionsStack);
+            passphraseSettingsContent.Controls.Add(lblPassphraseOptions);
             passphraseSettingsContent.Controls.Add(wordsRow);
 
-            // Mode switch: Password | Passphrase (inside the options container).
-            var btnModePassword = DialogControls.CreateSecondaryButton("Password", 100, 28);
-            var btnModePassphrase = DialogControls.CreateSecondaryButton("Passphrase", 100, 28);
-            btnModePassword.Margin = new Padding(0, 0, 6, 0);
-            btnModePassphrase.Margin = new Padding(0, 0, 0, 0);
+            // Mode tabs: Password | Passphrase — full-width, Generator-style underline tabs.
+            // Flat buttons (not Labels) so the caption always paints reliably in the TableLayoutPanel.
+            Button CreateModeTabButton(string text)
+            {
+                var btn = new Button
+                {
+                    Text = text,
+                    Dock = DockStyle.Fill,
+                    FlatStyle = FlatStyle.Flat,
+                    Font = AppTheme.Base,
+                    Cursor = Cursors.Hand,
+                    BackColor = AppTheme.PanelBackground,
+                    TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                    TabStop = false
+                };
+                btn.FlatAppearance.BorderSize = 0;
+                btn.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
+                btn.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
+                return btn;
+            }
+
+            var btnModePassword = CreateModeTabButton("Password");
+            var btnModePassphrase = CreateModeTabButton("Passphrase");
+            var underlinePassword = new Panel { Dock = DockStyle.Bottom, Height = 2, BackColor = AppTheme.Accent };
+            var underlinePassphrase = new Panel { Dock = DockStyle.Bottom, Height = 2, BackColor = AppTheme.Accent, Visible = false };
+
+            var modePasswordCell = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground };
+            modePasswordCell.Controls.Add(btnModePassword);
+            modePasswordCell.Controls.Add(underlinePassword);
+
+            var modePassphraseCell = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground };
+            modePassphraseCell.Controls.Add(btnModePassphrase);
+            modePassphraseCell.Controls.Add(underlinePassphrase);
+
             void SyncModeButtons()
             {
-                btnModePassword.BackColor = !lastGeneratedWasPassphrase ? AppTheme.AccentSubtle : AppTheme.PanelBackground;
-                btnModePassphrase.BackColor = lastGeneratedWasPassphrase ? AppTheme.AccentSubtle : AppTheme.PanelBackground;
+                bool passwordMode = !lastGeneratedWasPassphrase;
+                btnModePassword.ForeColor = passwordMode ? AppTheme.Accent : AppTheme.TextSecondary;
+                btnModePassphrase.ForeColor = passwordMode ? AppTheme.TextSecondary : AppTheme.Accent;
+                underlinePassword.Visible = passwordMode;
+                underlinePassphrase.Visible = !passwordMode;
             }
-            btnModePassword.Click += (s, e) =>
+
+            void SelectPasswordMode()
             {
                 lastGeneratedWasPassphrase = false;
                 UpdateGenerationSettingsMode();
                 SyncModeButtons();
-            };
-            btnModePassphrase.Click += (s, e) =>
+            }
+
+            void SelectPassphraseMode()
             {
                 lastGeneratedWasPassphrase = true;
                 UpdateGenerationSettingsMode();
                 SyncModeButtons();
-            };
+            }
+
+            btnModePassword.Click += (s, e) => SelectPasswordMode();
+            btnModePassphrase.Click += (s, e) => SelectPassphraseMode();
             SyncModeButtons();
 
-            var modeRow = new FlowLayoutPanel
+            var modeRow = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
-                AutoSize = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                Padding = new Padding(0, 4, 0, 8),
-                BackColor = AppTheme.Surface
+                Height = 36,
+                ColumnCount = 2,
+                RowCount = 1,
+                Padding = new Padding(0, 0, 0, 0),
+                BackColor = AppTheme.PanelBackground
             };
-            modeRow.Controls.Add(btnModePassword);
-            modeRow.Controls.Add(btnModePassphrase);
+            modeRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            modeRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            modeRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            modeRow.Controls.Add(modePasswordCell, 0, 0);
+            modeRow.Controls.Add(modePassphraseCell, 1, 0);
+
+            var modeBottomLine = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = AppTheme.Border };
+            var modeHost = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 40,
+                BackColor = AppTheme.PanelBackground
+            };
+            modeHost.Controls.Add(modeBottomLine);
+            modeHost.Controls.Add(modeRow);
 
             // Footer: Save (persist options) + Regenerate — same height, right-aligned pair.
             const int footerButtonHeight = 30;
@@ -406,7 +507,7 @@ namespace PasswordManager
                 Dock = DockStyle.Bottom,
                 Height = footerButtonHeight + 12,
                 Padding = new Padding(0, 8, 0, 0),
-                BackColor = AppTheme.Surface
+                BackColor = AppTheme.PanelBackground
             };
             // Right-dock order: last added sits outermost right → add Save last.
             btnRegeneratePassword.Dock = DockStyle.Right;
@@ -419,7 +520,7 @@ namespace PasswordManager
             var settingsBodyHost = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = AppTheme.Surface
+                BackColor = AppTheme.PanelBackground
             };
             settingsBodyHost.Controls.Add(passwordSettingsContent);
             settingsBodyHost.Controls.Add(passphraseSettingsContent);
@@ -428,14 +529,14 @@ namespace PasswordManager
             {
                 Dock = DockStyle.Fill,
                 Padding = new Padding(12, 8, 12, 10),
-                BackColor = AppTheme.Surface,
+                BackColor = AppTheme.PanelBackground,
                 Visible = false,
                 AutoScroll = false
             };
             // Dock order: mode (top), settings (fill), footer (bottom)
             generationBody.Controls.Add(settingsBodyHost);
             generationBody.Controls.Add(footerRow);
-            generationBody.Controls.Add(modeRow);
+            generationBody.Controls.Add(modeHost);
 
             // Bordered collapsible container — collapsed shows header only.
             generationSettingsPanel = new Panel
@@ -448,7 +549,7 @@ namespace PasswordManager
             var generationInset = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = AppTheme.Surface
+                BackColor = AppTheme.PanelBackground
             };
             generationInset.Controls.Add(generationBody);
             generationInset.Controls.Add(btnGenerationSettings);
@@ -462,12 +563,17 @@ namespace PasswordManager
             // the reference apps), replacing the old half-width Service+Username and
             // RepeatPassword+URL pairs - those were only paired up to fit the form's fixed
             // width, not because the fields are related.
-            var serviceGroup = CreateFieldGroup("Service Name", txtService, inputHeight);
+            var serviceField = DialogControls.CreateBorderedFieldRow(txtService);
+            var repeatField = DialogControls.CreateBorderedFieldRow(txtRepeatPassword);
+            var urlField = DialogControls.CreateBorderedFieldRow(txtUrl);
+            var notesField = DialogControls.CreateBorderedFieldRow(txtNotes);
+
+            var serviceGroup = CreateFieldGroup("Service Name", serviceField, inputHeight);
             var usernameGroup = CreateFieldGroup("Username", usernameRow, inputHeight);
             var passwordGroup = CreateFieldGroup("Password", passwordRow, inputHeight);
-            var repeatGroup = CreateFieldGroup("Repeat Password", txtRepeatPassword, inputHeight);
-            var urlGroup = CreateFieldGroup("URL", txtUrl, inputHeight);
-            var notesGroup = CreateFieldGroup("Notes", txtNotes, 64);
+            var repeatGroup = CreateFieldGroup("Repeat Password", repeatField, inputHeight);
+            var urlGroup = CreateFieldGroup("URL", urlField, inputHeight);
+            var notesGroup = CreateFieldGroup("Notes", notesField, 72);
 
             // Explicit tab order: Service → Username → Password → Repeat → URL → Notes.
             // Without this, TabIndex follows Controls.Add order (notes added first), so

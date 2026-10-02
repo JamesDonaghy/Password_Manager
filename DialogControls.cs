@@ -1,3 +1,4 @@
+using System;
 using System.Windows.Forms;
 
 namespace PasswordManager
@@ -156,22 +157,60 @@ namespace PasswordManager
             return button;
         }
 
-        /// Wraps a read-only value control (and optional trailing action buttons, e.g.
-        /// Copy/Show/Open) in a bordered, white "field box" - the same hairline-border-plus-
-        /// white-inset look already established for the search box and AddEntryForm's
-        /// inputs, applied here to read-only details-panel fields instead of editable ones.
+        /// Wraps a value control (and optional trailing action buttons, e.g. Copy/Show)
+        /// in a bordered, white "field box". Single-line TextBox/ComboBox inputs are
+        /// vertically centered so the caret is not stuck at the top of a taller row.
         public static Panel CreateBorderedFieldRow(Control valueControl, params Control[] trailingButtons)
         {
             var border = new Panel { BackColor = AppTheme.Border, Padding = new Padding(1) };
 
             // Only drop the right padding when there's a trailing button to sit flush
-            // against the edge - a field with no button (just Notes, currently) still
-            // needs its own breathing room on that side for the text itself.
+            // against the edge - a field with no button still needs breathing room on
+            // that side for the text itself.
             int rightPadding = trailingButtons.Length > 0 ? 0 : 10;
             var inset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(10, 0, rightPadding, 0) };
 
-            valueControl.Dock = DockStyle.Fill;
-            inset.Controls.Add(valueControl);
+            bool isMultiline = valueControl is TextBox multi && multi.Multiline;
+
+            if (isMultiline)
+            {
+                valueControl.Dock = DockStyle.Fill;
+                inset.Controls.Add(valueControl);
+            }
+            else
+            {
+                // Don't Dock=Fill a single-line input: WinForms draws the caret/text at the
+                // top of the client area, which looks high inside a 34–36px bordered row.
+                valueControl.Dock = DockStyle.None;
+                valueControl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+                inset.Controls.Add(valueControl);
+
+                void CenterValue()
+                {
+                    int trailingWidth = 0;
+                    foreach (Control button in trailingButtons)
+                    {
+                        trailingWidth += button.Width;
+                    }
+
+                    int height = valueControl.PreferredSize.Height;
+                    if (valueControl is TextBox)
+                    {
+                        height = Math.Max(height, valueControl.Font.Height + 6);
+                    }
+                    else if (valueControl is ComboBox combo)
+                    {
+                        height = Math.Max(height, combo.PreferredHeight);
+                    }
+
+                    int y = Math.Max(0, (inset.ClientSize.Height - height) / 2);
+                    int width = Math.Max(0, inset.ClientSize.Width - trailingWidth);
+                    valueControl.SetBounds(0, y, width, height);
+                }
+
+                inset.Layout += (s, e) => CenterValue();
+                inset.Resize += (s, e) => CenterValue();
+            }
 
             // Right-docked siblings render in the order added (unlike Top/Left, where it's
             // reversed) - the last one added lands flush against the true right edge - so
