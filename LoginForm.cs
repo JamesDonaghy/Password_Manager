@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace PasswordManager
@@ -11,6 +12,8 @@ namespace PasswordManager
         private Label lblMessage;
         private Button btnTogglePasswordVisibility; // Button to toggle password visibility
         private bool isPasswordVisible = false; // Track visibility state
+        /// Set when unlock/setup succeeds and MainForm is shown — FormClosed skips Exit then.
+        private bool unlockSucceeded = false;
 
         // If no master password has been set up yet on this machine, the form switches
         // into "create a master password" mode instead of "log in" mode.
@@ -20,129 +23,225 @@ namespace PasswordManager
         {
             isFirstRunSetup = !CredentialStore.CredentialExists();
 
-            this.Text = isFirstRunSetup ? "Set Up Master Password" : "Login";
+            this.Text = "Password Manager";
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
+            this.MinimizeBox = true;
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = AppTheme.Background;
             this.Font = AppTheme.Base;
+            // Compact window — less empty space above/below the card.
+            this.ClientSize = new Size(440, isFirstRunSetup ? 460 : 380);
 
-            const int contentPadding = 24;
-            const int headerHeight = 44;
-            const int introHeight = 40;
-            const int messageHeight = 24;
-            const int buttonHeight = 36;
-
-            // Centered, branded heading rather than the other dialogs' left-aligned title -
-            // a deliberate exception, since this is the app's actual entry screen rather
-            // than a task dialog.
-            var lblFormTitle = new Label
+            // Closing the login window must end the process. After a successful unlock this
+            // form is only Hidden (Application.Run still owns it); after Lock() a *second*
+            // LoginForm may be shown. Either way, closing without unlocking should exit.
+            this.FormClosed += (s, e) =>
             {
-                Text = isFirstRunSetup ? "🔒 Set Up Your Vault" : "🔒 Welcome Back",
-                Dock = DockStyle.Top,
-                Height = headerHeight,
-                Font = AppTheme.Heading,
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+                if (!unlockSucceeded)
+                {
+                    Application.Exit();
+                }
             };
 
-            Label introLabel = null;
+            // --- Centered card content ---
+            var card = new Panel
+            {
+                Width = 340,
+                Height = isFirstRunSetup ? 400 : 320,
+                BackColor = AppTheme.Background
+            };
+
+            // Soft accent tile with lock icon (matches reference welcome screen).
+            var iconTile = new Panel
+            {
+                Size = new Size(52, 52),
+                BackColor = AppTheme.AccentSubtle
+            };
+            var lblIcon = new Label
+            {
+                Text = "🔒",
+                Dock = DockStyle.Fill,
+                Font = new Font(AppTheme.Base.FontFamily, 18f),
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.AccentSubtle,
+                ForeColor = AppTheme.Accent
+            };
+            iconTile.Controls.Add(lblIcon);
+
+            var lblTitle = new Label
+            {
+                Text = isFirstRunSetup ? "Set Up Your Vault" : "Welcome Back",
+                AutoSize = false,
+                Size = new Size(340, 30),
+                Font = new Font(AppTheme.Base.FontFamily, 16f, FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.Background
+            };
+
+            var lblSubtitle = new Label
+            {
+                Text = isFirstRunSetup
+                    ? "Choose a master password to secure your vault."
+                    : "Enter your master password to unlock your vault.",
+                AutoSize = false,
+                Size = new Size(340, 22),
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = ContentAlignment.TopCenter,
+                BackColor = AppTheme.Background
+            };
+
+            lblMessage = new Label
+            {
+                AutoSize = false,
+                Size = new Size(340, 18),
+                ForeColor = Color.IndianRed,
+                Font = AppTheme.Base,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.Background
+            };
+
+            // Borderless inputs inside the shared bordered field chrome.
+            txtPassword = new TextBox
+            {
+                PlaceholderText = isFirstRunSetup ? "Master password" : "Enter your master password",
+                PasswordChar = '*',
+                BorderStyle = BorderStyle.None,
+                Font = AppTheme.Base,
+                BackColor = AppTheme.Surface
+            };
+            txtRepeatPassword = new TextBox
+            {
+                PlaceholderText = "Repeat master password",
+                PasswordChar = '*',
+                BorderStyle = BorderStyle.None,
+                Font = AppTheme.Base,
+                BackColor = AppTheme.Surface,
+                Visible = isFirstRunSetup
+            };
+
+            const int fieldHeight = 36;
+            const int cardWidth = 340;
+            btnTogglePasswordVisibility = DialogControls.CreateIconButton("👁", 32);
+            btnTogglePasswordVisibility.BackColor = AppTheme.Surface;
+            btnTogglePasswordVisibility.Click += BtnTogglePasswordVisibility_Click;
+            var visibilityTip = new ToolTip();
+            visibilityTip.SetToolTip(btnTogglePasswordVisibility, "Show password");
+            btnTogglePasswordVisibility.Tag = visibilityTip;
+
+            var passwordField = DialogControls.CreateBorderedFieldRow(txtPassword, btnTogglePasswordVisibility);
+            passwordField.Size = new Size(cardWidth, fieldHeight);
+
+            Panel repeatField = null;
             if (isFirstRunSetup)
             {
-                introLabel = new Label
+                repeatField = DialogControls.CreateBorderedFieldRow(txtRepeatPassword);
+                repeatField.Size = new Size(cardWidth, fieldHeight);
+            }
+
+            var lblPasswordCaption = new Label
+            {
+                Text = "Master Password",
+                AutoSize = false,
+                Size = new Size(cardWidth, 18),
+                Font = AppTheme.Caption,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = ContentAlignment.BottomLeft,
+                BackColor = AppTheme.Background
+            };
+
+            Label lblRepeatCaption = null;
+            if (isFirstRunSetup)
+            {
+                lblRepeatCaption = new Label
                 {
-                    Text = "No master password is set up on this device yet.\nChoose one to secure your vault.",
-                    Dock = DockStyle.Top,
-                    Height = introHeight,
-                    Font = AppTheme.Base,
+                    Text = "Repeat Master Password",
+                    AutoSize = false,
+                    Size = new Size(cardWidth, 18),
+                    Font = AppTheme.Caption,
                     ForeColor = AppTheme.TextSecondary,
-                    TextAlign = System.Drawing.ContentAlignment.TopCenter
+                    TextAlign = ContentAlignment.BottomLeft,
+                    BackColor = AppTheme.Background
                 };
             }
 
-            // Fixed-height (rather than AutoSize) so validation messages appearing/
-            // disappearing don't reflow the rest of the form - same reasoning as the
-            // other dialogs' lblMessage.
-            lblMessage = new Label
-            {
-                Dock = DockStyle.Top,
-                Height = messageHeight,
-                ForeColor = System.Drawing.Color.IndianRed,
-                Font = AppTheme.Base,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
-            };
-
-            txtPassword = new TextBox { PlaceholderText = "Master Password", PasswordChar = '*', BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base };
-            txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Master Password", PasswordChar = '*', BorderStyle = BorderStyle.FixedSingle, Font = AppTheme.Base, Visible = isFirstRunSetup };
-
-            // A single-line TextBox always renders at its own font/border-derived height -
-            // PreferredHeight - and silently ignores any Height set on it (same issue fixed
-            // on ManageUsernamesForm's Add row). Sizing the eye-toggle button, and the field
-            // groups below, to that same value is what keeps everything vertically aligned,
-            // rather than asking the textbox to match a separate fixed button height.
-            int inputHeight = txtPassword.PreferredHeight;
-            int fieldGroupHeight = 18 + inputHeight + 10; // Matches DialogControls.CreateFieldGroup's own label/margin constants
-
-            btnTogglePasswordVisibility = DialogControls.CreateIconButton("👁️", inputHeight);
-            btnTogglePasswordVisibility.Click += BtnTogglePasswordVisibility_Click;
-
-            // Textbox fills the remaining width, eye-toggle button docked to its right -
-            // same pattern as AddEntryForm's password row.
-            var passwordRow = new Panel { BackColor = AppTheme.Background };
-            passwordRow.Controls.Add(txtPassword);
-            txtPassword.Dock = DockStyle.Fill;
-            passwordRow.Controls.Add(btnTogglePasswordVisibility);
-
-            var passwordGroup = DialogControls.CreateFieldGroup("Master Password", passwordRow, inputHeight);
-            var repeatGroup = isFirstRunSetup ? DialogControls.CreateFieldGroup("Repeat Master Password", txtRepeatPassword, inputHeight) : null;
-
-            // Full-width primary button rather than the other dialogs' right-aligned
-            // Save/Cancel row - there's no secondary/cancel action on a login screen, so
-            // one full-width call-to-action reads better here.
-            btnLogin = DialogControls.CreatePrimaryButton(isFirstRunSetup ? "Create Master Password" : "Login", 0, buttonHeight);
-            btnLogin.Dock = DockStyle.Top;
-
-            var contentPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(contentPadding, 8, contentPadding, 8), BackColor = AppTheme.Background };
-
-            // Dock=Top siblings stack in reverse of add order (last added ends up closest
-            // to the top edge) - same quirk called out throughout the other dialogs.
-            contentPanel.Controls.Add(btnLogin);
-            if (repeatGroup != null)
-            {
-                contentPanel.Controls.Add(repeatGroup);
-            }
-            contentPanel.Controls.Add(passwordGroup);
-            contentPanel.Controls.Add(lblMessage);
-            if (introLabel != null)
-            {
-                contentPanel.Controls.Add(introLabel);
-            }
-
-            this.Controls.Add(contentPanel);
-            this.Controls.Add(lblFormTitle);
-
-            // isFirstRunSetup is fixed for this form's whole lifetime (unlike AddEntryForm's
-            // length slider), so the exact content height can just be computed once here
-            // instead of needing a resizable/scrollable safety net.
-            int contentHeight = headerHeight + messageHeight + fieldGroupHeight + buttonHeight + 16 /* contentPanel top+bottom padding */
-                + (introLabel != null ? introHeight : 0)
-                + (repeatGroup != null ? fieldGroupHeight : 0);
-            this.ClientSize = new System.Drawing.Size(380, contentHeight);
-
-            // Set event for button click - which handler runs depends on whether we're
-            // setting up a master password for the first time or logging in with one
-            // that already exists.
+            // Full-width primary action.
+            btnLogin = DialogControls.CreatePrimaryButton(
+                isFirstRunSetup ? "Create Master Password" : "Unlock",
+                cardWidth,
+                38);
             btnLogin.Click += isFirstRunSetup ? (EventHandler)BtnCreateMasterPassword_Click : BtnLogin_Click;
 
-            // Handle key down event for text boxes
+            var lblEnterHint = new Label
+            {
+                Text = "⌨  Press Enter to unlock",
+                AutoSize = false,
+                Size = new Size(cardWidth, 20),
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.Background,
+                Visible = !isFirstRunSetup
+            };
+
+            // Vertical stack inside the card (manual Y positions for predictable centering).
+            int y = 0;
+            void Place(Control c, int height, int gapAfter = 0)
+            {
+                c.Location = new Point(0, y);
+                c.Width = cardWidth;
+                if (height > 0)
+                {
+                    c.Height = height;
+                }
+
+                card.Controls.Add(c);
+                y += (height > 0 ? height : c.Height) + gapAfter;
+            }
+
+            iconTile.Location = new Point((cardWidth - iconTile.Width) / 2, y);
+            card.Controls.Add(iconTile);
+            y += iconTile.Height + 10;
+
+            Place(lblTitle, 28, 4);
+            Place(lblSubtitle, 20, 4);
+            Place(lblMessage, 18, 4);
+            Place(lblPasswordCaption, 18, 2);
+            Place(passwordField, fieldHeight, isFirstRunSetup ? 8 : 12);
+
+            if (isFirstRunSetup && lblRepeatCaption != null && repeatField != null)
+            {
+                Place(lblRepeatCaption, 18, 2);
+                Place(repeatField, fieldHeight, 12);
+            }
+
+            Place(btnLogin, 38, 10);
+            if (!isFirstRunSetup)
+            {
+                Place(lblEnterHint, 20, 0);
+            }
+
+            card.Height = y + 4;
+
+            // Center the card when the form resizes / on first layout.
+            void CenterCard()
+            {
+                card.Left = Math.Max(0, (ClientSize.Width - card.Width) / 2);
+                card.Top = Math.Max(0, (ClientSize.Height - card.Height) / 2);
+            }
+
+            Controls.Add(card);
+            Load += (s, e) => CenterCard();
+            Resize += (s, e) => CenterCard();
+            CenterCard();
+
             txtPassword.KeyDown += TextBox_KeyDown;
             txtRepeatPassword.KeyDown += TextBox_KeyDown;
 
-            // So the person can start typing their master password immediately on launch,
-            // without needing to click into the field first. Setting ActiveControl (rather
-            // than calling txtPassword.Focus() here) is what actually works before the form
-            // has a window handle - WinForms applies it once the form is shown.
-            this.ActiveControl = txtPassword;
+            // Start typing immediately without clicking the field.
+            ActiveControl = txtPassword;
         }
 
         private void TextBox_KeyDown(object sender, KeyEventArgs e)
@@ -183,10 +282,10 @@ namespace PasswordManager
                 lblMessage.Text = "";
 
                 // MainForm sets its own size/position in its own constructor (1190x650,
-                // centered) - it doesn't need LoginForm's now-much-smaller dimensions
-                // copied onto it, which is what the old Size/Location overrides here did.
+                // centered) - it doesn't need LoginForm's dimensions copied onto it.
                 MainForm mainForm = new MainForm(txtPassword.Text);
 
+                unlockSucceeded = true;
                 mainForm.Show(); // Show the main form
                 this.Hide(); // Hide the login form
             }
@@ -230,19 +329,23 @@ namespace PasswordManager
 
             // Proceed straight into the app now that the master password is set up,
             // rather than making the user immediately re-enter it to log in again.
-            // MainForm sets its own size/position in its own constructor - see BtnLogin_Click.
             MainForm mainForm = new MainForm(txtPassword.Text);
 
+            unlockSucceeded = true;
             mainForm.Show();
             this.Hide();
         }
 
         private void BtnTogglePasswordVisibility_Click(object sender, EventArgs e)
         {
-            isPasswordVisible = !isPasswordVisible; // Toggle visibility state
-            txtPassword.PasswordChar = isPasswordVisible ? '\0' : '*'; // Show or hide password
-            txtRepeatPassword.PasswordChar = isPasswordVisible ? '\0' : '*'; // Show or hide repeat password
-            btnTogglePasswordVisibility.Text = isPasswordVisible ? "🙈" : "👁️"; // Update button icon
+            isPasswordVisible = !isPasswordVisible;
+            txtPassword.PasswordChar = isPasswordVisible ? '\0' : '*';
+            txtRepeatPassword.PasswordChar = isPasswordVisible ? '\0' : '*';
+            btnTogglePasswordVisibility.Text = isPasswordVisible ? "🙈" : "👁";
+            if (btnTogglePasswordVisibility.Tag is ToolTip tip)
+            {
+                tip.SetToolTip(btnTogglePasswordVisibility, isPasswordVisible ? "Hide password" : "Show password");
+            }
         }
     }
 }

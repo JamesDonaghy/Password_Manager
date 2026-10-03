@@ -167,8 +167,8 @@ namespace PasswordManager
             // Only drop the right padding when there's a trailing button to sit flush
             // against the edge - a field with no button still needs breathing room on
             // that side for the text itself.
-            int rightPadding = trailingButtons.Length > 0 ? 0 : 10;
-            var inset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(10, 0, rightPadding, 0) };
+            int rightPadding = trailingButtons.Length > 0 ? 0 : 12;
+            var inset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(12, 0, rightPadding, 0) };
 
             bool isMultiline = valueControl is TextBox multi && multi.Multiline;
 
@@ -203,9 +203,13 @@ namespace PasswordManager
                         height = Math.Max(height, combo.PreferredHeight);
                     }
 
-                    int y = Math.Max(0, (inset.ClientSize.Height - height) / 2);
-                    int width = Math.Max(0, inset.ClientSize.Width - trailingWidth);
-                    valueControl.SetBounds(0, y, width, height);
+                    // SetBounds ignores Panel.Padding (unlike Dock), so apply it manually —
+                    // otherwise single-line text sits flush against the left border.
+                    int left = inset.Padding.Left;
+                    int availableHeight = inset.ClientSize.Height - inset.Padding.Top - inset.Padding.Bottom;
+                    int y = inset.Padding.Top + Math.Max(0, (availableHeight - height) / 2);
+                    int width = Math.Max(0, inset.ClientSize.Width - left - inset.Padding.Right - trailingWidth);
+                    valueControl.SetBounds(left, y, width, height);
                 }
 
                 inset.Layout += (s, e) => CenterValue();
