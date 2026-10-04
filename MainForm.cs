@@ -48,15 +48,23 @@ namespace PasswordManager
         private CheckBox chkGeneratorSymbols;
         private Panel generatorPasswordPanel;
         private Panel generatorPassphrasePanel;
+        private Panel generatorUsernamePanel;
         private Label btnTabPassword;
         private Label btnTabPassphrase;
+        private Label btnTabUsername;
         private Panel tabUnderlinePassword;
         private Panel tabUnderlinePassphrase;
+        private Panel tabUnderlineUsername;
         private TextBox txtGeneratedPassphrase;
         private NumericUpDown nudPassphraseWords;
         private CheckBox chkPassphraseCapitalize;
         private CheckBox chkPassphraseNumbers;
         private CheckBox chkPassphraseSpecial;
+        private TextBox txtGeneratedUsername;
+        private NumericUpDown nudUsernameWords;
+        private ComboBox cmbUsernameSeparator;
+        private ComboBox cmbUsernameCapitalization;
+        private CheckBox chkUsernameNumbers;
         private Label lblGeneratorRightHeading;
         private Label lblGeneratorRightHint;
         private Panel rightDetailsPanel;
@@ -962,15 +970,15 @@ namespace PasswordManager
             generatorRightPanel.Visible = true;
         }
 
-        /// Builds the Generator page with Password / Passphrase tabs.
+        /// Builds the Generator page with Password / Passphrase / Username tabs.
         private void BuildGeneratorPage(out Panel generatorMiddle, out Panel generatorRight)
         {
-            // --- Tab strip ---
+            // --- Tab strip (three equal-style tabs) ---
             btnTabPassword = new Label
             {
                 Text = "Password Generator",
                 AutoSize = false,
-                Width = 160,
+                Width = 150,
                 Height = 32,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.Accent,
@@ -978,54 +986,81 @@ namespace PasswordManager
                 Cursor = Cursors.Hand,
                 Location = new System.Drawing.Point(0, 0)
             };
-            btnTabPassword.Click += (s, e) => ShowGeneratorTab(passwordTab: true);
+            btnTabPassword.Click += (s, e) => ShowGeneratorTab(0);
 
             btnTabPassphrase = new Label
             {
                 Text = "Passphrase Generator",
                 AutoSize = false,
-                Width = 170,
+                Width = 160,
                 Height = 32,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextSecondary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
                 Cursor = Cursors.Hand,
-                Location = new System.Drawing.Point(170, 0)
+                Location = new System.Drawing.Point(155, 0)
             };
-            btnTabPassphrase.Click += (s, e) => ShowGeneratorTab(passwordTab: false);
+            btnTabPassphrase.Click += (s, e) => ShowGeneratorTab(1);
+
+            btnTabUsername = new Label
+            {
+                Text = "Username Generator",
+                AutoSize = false,
+                Width = 155,
+                Height = 32,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Cursor = Cursors.Hand,
+                Location = new System.Drawing.Point(320, 0)
+            };
+            btnTabUsername.Click += (s, e) => ShowGeneratorTab(2);
 
             tabUnderlinePassword = new Panel
             {
                 Height = 2,
-                Width = 150,
+                Width = 140,
                 BackColor = AppTheme.Accent,
                 Location = new System.Drawing.Point(0, 32)
             };
             tabUnderlinePassphrase = new Panel
             {
                 Height = 2,
-                Width = 160,
+                Width = 150,
                 BackColor = AppTheme.Accent,
-                Location = new System.Drawing.Point(170, 32),
+                Location = new System.Drawing.Point(155, 32),
+                Visible = false
+            };
+            tabUnderlineUsername = new Panel
+            {
+                Height = 2,
+                Width = 145,
+                BackColor = AppTheme.Accent,
+                Location = new System.Drawing.Point(320, 32),
                 Visible = false
             };
 
             var tabStrip = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = AppTheme.Background };
             tabStrip.Controls.Add(btnTabPassword);
             tabStrip.Controls.Add(btnTabPassphrase);
+            tabStrip.Controls.Add(btnTabUsername);
             tabStrip.Controls.Add(tabUnderlinePassword);
             tabStrip.Controls.Add(tabUnderlinePassphrase);
+            tabStrip.Controls.Add(tabUnderlineUsername);
 
             var tabBottomLine = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = AppTheme.Border };
             var spacerAfterTabs = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background };
 
             generatorPasswordPanel = BuildPasswordGeneratorContent();
             generatorPassphrasePanel = BuildPassphraseGeneratorContent();
+            generatorUsernamePanel = BuildUsernameGeneratorContent();
             generatorPassphrasePanel.Visible = false;
+            generatorUsernamePanel.Visible = false;
 
             var bodyHost = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background };
             bodyHost.Controls.Add(generatorPasswordPanel);
             bodyHost.Controls.Add(generatorPassphrasePanel);
+            bodyHost.Controls.Add(generatorUsernamePanel);
 
             // Dock=Top reverse: body first (fill), then spacers/tabs on top
             generatorMiddle = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background, Padding = new Padding(16, 14, 16, 0) };
@@ -1047,7 +1082,7 @@ namespace PasswordManager
             {
                 Text = "Adjust length and character types, then copy the password into a vault entry.",
                 Dock = DockStyle.Top,
-                Height = 80,
+                Height = 120,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextSecondary,
                 TextAlign = System.Drawing.ContentAlignment.TopCenter
@@ -1059,6 +1094,7 @@ namespace PasswordManager
 
             RegeneratePasswordFromOptions();
             RegeneratePassphraseFromOptions();
+            RegenerateUsernameFromOptions();
         }
 
         private Panel BuildPasswordGeneratorContent()
@@ -1298,33 +1334,236 @@ namespace PasswordManager
             return panel;
         }
 
-        private void ShowGeneratorTab(bool passwordTab)
+        /// <param name="tabIndex">0 = Password, 1 = Passphrase, 2 = Username</param>
+        private void ShowGeneratorTab(int tabIndex)
         {
-            if (generatorPasswordPanel == null || generatorPassphrasePanel == null)
+            if (generatorPasswordPanel == null || generatorPassphrasePanel == null || generatorUsernamePanel == null)
             {
                 return;
             }
 
-            generatorPasswordPanel.Visible = passwordTab;
-            generatorPassphrasePanel.Visible = !passwordTab;
-            tabUnderlinePassword.Visible = passwordTab;
-            tabUnderlinePassphrase.Visible = !passwordTab;
-            btnTabPassword.ForeColor = passwordTab ? AppTheme.Accent : AppTheme.TextSecondary;
-            btnTabPassphrase.ForeColor = passwordTab ? AppTheme.TextSecondary : AppTheme.Accent;
+            generatorPasswordPanel.Visible = tabIndex == 0;
+            generatorPassphrasePanel.Visible = tabIndex == 1;
+            generatorUsernamePanel.Visible = tabIndex == 2;
+            tabUnderlinePassword.Visible = tabIndex == 0;
+            tabUnderlinePassphrase.Visible = tabIndex == 1;
+            tabUnderlineUsername.Visible = tabIndex == 2;
+            btnTabPassword.ForeColor = tabIndex == 0 ? AppTheme.Accent : AppTheme.TextSecondary;
+            btnTabPassphrase.ForeColor = tabIndex == 1 ? AppTheme.Accent : AppTheme.TextSecondary;
+            btnTabUsername.ForeColor = tabIndex == 2 ? AppTheme.Accent : AppTheme.TextSecondary;
 
             if (lblGeneratorRightHeading != null)
             {
-                if (passwordTab)
+                switch (tabIndex)
                 {
-                    lblGeneratorRightHeading.Text = "Password Generator";
-                    lblGeneratorRightHint.Text = "Adjust length and character types, then copy the password into a vault entry.";
-                }
-                else
-                {
-                    lblGeneratorRightHeading.Text = "Passphrase Generator";
-                    lblGeneratorRightHint.Text = "Passphrases are longer, easier to remember, and more secure than traditional passwords. Ideal when you want strong security without a complex random string.";
+                    case 1:
+                        lblGeneratorRightHeading.Text = "Passphrase Generator";
+                        lblGeneratorRightHint.Text =
+                            "Passphrases are longer, easier to remember, and more secure than traditional passwords. Ideal when you want strong security without a complex random string.";
+                        break;
+                    case 2:
+                        lblGeneratorRightHeading.Text = "Username Generator";
+                        lblGeneratorRightHint.Text =
+                            "Generate unique, memorable usernames that are easy to remember and hard for others to guess. Perfect for websites, apps and online services.\n\n" +
+                            "• Creates readable, memorable usernames\n" +
+                            "• Helps avoid username reuse\n" +
+                            "• Customisable style and length\n" +
+                            "• Works well across different websites";
+                        break;
+                    default:
+                        lblGeneratorRightHeading.Text = "Password Generator";
+                        lblGeneratorRightHint.Text = "Adjust length and character types, then copy the password into a vault entry.";
+                        break;
                 }
             }
+        }
+
+        private Panel BuildUsernameGeneratorContent()
+        {
+            var lblHeading = new Label
+            {
+                Text = "Username Generator",
+                Dock = DockStyle.Top,
+                Height = 32,
+                Font = AppTheme.Heading,
+                ForeColor = AppTheme.TextPrimary
+            };
+            var lblSubtitle = new Label
+            {
+                Text = "Create unique, memorable usernames for your accounts.",
+                Dock = DockStyle.Top,
+                Height = 28,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary
+            };
+
+            txtGeneratedUsername = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.None,
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.TextPrimary,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 11f),
+                ReadOnly = true
+            };
+            var btnCopy = DialogControls.CreateInlineActionButton("Copy", 56, 26);
+            btnCopy.Click += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(txtGeneratedUsername.Text))
+                {
+                    clipboardGuard.CopyAndAutoClear(txtGeneratedUsername.Text);
+                }
+            };
+            var resultRow = DialogControls.CreateBorderedFieldRow(txtGeneratedUsername, btnCopy);
+            resultRow.Dock = DockStyle.Top;
+            resultRow.Height = 40;
+
+            // Words (count of word parts in the username)
+            nudUsernameWords = new NumericUpDown
+            {
+                Minimum = UsernameGenerator.MinWordCount,
+                Maximum = UsernameGenerator.MaxWordCount,
+                Value = UsernameGenerator.DefaultWordCount,
+                Width = 64,
+                Font = AppTheme.Base,
+                Dock = DockStyle.Left
+            };
+            var wordsRow = CreateUsernameLabeledRow("Words", nudUsernameWords);
+
+            // Separator (only relevant when more than one word is joined)
+            cmbUsernameSeparator = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 120,
+                Font = AppTheme.Base,
+                Dock = DockStyle.Left
+            };
+            cmbUsernameSeparator.Items.AddRange(new object[] { ".", "_", "-", "None" });
+            cmbUsernameSeparator.SelectedIndex = 0;
+            cmbUsernameSeparator.SelectedIndexChanged += (s, e) => RegenerateUsernameFromOptions();
+            var separatorRow = CreateUsernameLabeledRow("Separator", cmbUsernameSeparator);
+
+            void SyncUsernameSeparatorVisibility()
+            {
+                separatorRow.Visible = nudUsernameWords.Value > 1;
+            }
+
+            nudUsernameWords.ValueChanged += (s, e) =>
+            {
+                SyncUsernameSeparatorVisibility();
+                RegenerateUsernameFromOptions();
+            };
+            SyncUsernameSeparatorVisibility();
+
+            // Capitalization
+            cmbUsernameCapitalization = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 140,
+                Font = AppTheme.Base,
+                Dock = DockStyle.Left
+            };
+            cmbUsernameCapitalization.Items.AddRange(new object[] { "Lowercase", "Capitalized", "Mixed Case" });
+            cmbUsernameCapitalization.SelectedIndex = 0;
+            cmbUsernameCapitalization.SelectedIndexChanged += (s, e) => RegenerateUsernameFromOptions();
+            var capitalRow = CreateUsernameLabeledRow("Capitalization", cmbUsernameCapitalization);
+
+            chkUsernameNumbers = CreateGeneratorOptionCheckBox("Include Numbers", true);
+            // Reuse CreateGeneratorOptionCheckBox wires password regen — override for username.
+            chkUsernameNumbers.CheckedChanged -= GeneratorOption_CheckedChanged;
+            chkUsernameNumbers.CheckedChanged += (s, e) => RegenerateUsernameFromOptions();
+
+            var optionsStack = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = AppTheme.Background };
+            optionsStack.Controls.Add(chkUsernameNumbers);
+
+            var lblOptions = new Label
+            {
+                Text = "Options",
+                Dock = DockStyle.Top,
+                Height = 24,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft
+            };
+
+            var btnGenerate = DialogControls.CreatePrimaryButton("👤  Generate Username", 180, 36);
+            btnGenerate.Dock = DockStyle.Left;
+            btnGenerate.Click += (s, e) => RegenerateUsernameFromOptions();
+            var buttonRow = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 44,
+                BackColor = AppTheme.Background,
+                Padding = new Padding(0, 8, 0, 0)
+            };
+            buttonRow.Controls.Add(btnGenerate);
+
+            var panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background };
+            // Dock=Top reverse: visual top = heading … generate
+            panel.Controls.Add(buttonRow);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Background });
+            panel.Controls.Add(optionsStack);
+            panel.Controls.Add(lblOptions);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Background });
+            panel.Controls.Add(capitalRow);
+            panel.Controls.Add(separatorRow);
+            panel.Controls.Add(wordsRow);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
+            panel.Controls.Add(resultRow);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
+            panel.Controls.Add(lblSubtitle);
+            panel.Controls.Add(lblHeading);
+            return panel;
+        }
+
+        private Panel CreateUsernameLabeledRow(string labelText, Control field)
+        {
+            var lbl = new Label
+            {
+                Text = labelText,
+                Dock = DockStyle.Left,
+                Width = 110,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            var row = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = AppTheme.Background };
+            row.Controls.Add(field);
+            row.Controls.Add(lbl);
+            return row;
+        }
+
+        private void RegenerateUsernameFromOptions()
+        {
+            if (txtGeneratedUsername == null || nudUsernameWords == null)
+            {
+                return;
+            }
+
+            var separator = cmbUsernameSeparator?.SelectedIndex switch
+            {
+                1 => UsernameGenerator.SeparatorKind.Underscore,
+                2 => UsernameGenerator.SeparatorKind.Hyphen,
+                3 => UsernameGenerator.SeparatorKind.None,
+                _ => UsernameGenerator.SeparatorKind.Dot
+            };
+            var capitalization = cmbUsernameCapitalization?.SelectedIndex switch
+            {
+                1 => UsernameGenerator.Capitalization.Capitalized,
+                2 => UsernameGenerator.Capitalization.MixedCase,
+                _ => UsernameGenerator.Capitalization.Lowercase
+            };
+
+            var options = new UsernameGenerator.Options
+            {
+                Style = UsernameGenerator.Style.Random,
+                WordCount = (int)nudUsernameWords.Value,
+                Separator = separator,
+                Capitalization = capitalization,
+                IncludeNumbers = chkUsernameNumbers?.Checked ?? true
+            };
+
+            txtGeneratedUsername.Text = UsernameGenerator.Generate(options);
         }
 
         private CheckBox CreatePassphraseOptionCheckBox(string text, bool isChecked)
