@@ -18,9 +18,9 @@ password, so nothing is stored in plain text.
 
 **Passwords & generation**
 - Dedicated Generator page with three tabs:
-  - **Password Generator** — adjustable length and character types
-  - **Passphrase Generator** — random-word passphrases with formatting options
-  - **Username Generator** — memorable usernames (word count, separator, capitalization, numbers)
+  - **Password Generator** - adjustable length and character types
+  - **Passphrase Generator** - random-word passphrases with formatting options
+  - **Username Generator** - memorable usernames (word count, separator, capitalization, numbers)
 - Password and passphrase generation from the Add/Edit Entry form, with optional saved preferences
 - Live password strength meter when typing or generating a password
 - Warns (without blocking) if a password is reused across entries
@@ -52,13 +52,13 @@ password, so nothing is stored in plain text.
 - Your master password is never stored - only a secure hash of it (PBKDF2), used
   to check you've entered it correctly
 - The same master password is used to derive a separate encryption key for your
-  saved entries (its own independent salt - never the same derived value used
+  saved entries (its own independent salt, never the same derived value used
   for login), so only you can unlock them
 - Entries are encrypted with AES-GCM (authenticated encryption, so a corrupted or
   tampered file fails to open rather than silently returning garbage) and saved to
   `%AppData%\PasswordManager`, outside of this project folder
 - App preferences (sort order, icons, auto-lock, generation defaults, etc.) are
-  stored as plain JSON under the same AppData folder — not inside the encrypted vault
+  stored as plain JSON under the same AppData folder, not inside the encrypted vault
 - Vault writes are atomic (written to a temp file, then swapped in), so an
   interruption like a crash or power loss can't leave the vault half-written
 - If the main vault file is ever unreadable, the app automatically falls back to
