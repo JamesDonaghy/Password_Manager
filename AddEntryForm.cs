@@ -24,6 +24,7 @@ namespace PasswordManager
         private Button btnTogglePasswordVisibility;
         private Panel generationSettingsPanel;
         private Button btnManageUsernames; // Opens the curated username suggestions list
+        private Button btnGenerateUsername; // Opens the generate-username dialog
         private Button btnSave;
         private Button btnCancel;
         private TrackBar sliderPasswordLength; // Slider for password length
@@ -87,6 +88,12 @@ namespace PasswordManager
             btnManageUsernames = CreateIconButton("👤", iconSize); // Manage suggested usernames
             btnManageUsernames.BackColor = AppTheme.Surface;
             btnManageUsernames.Click += BtnManageUsernames_Click;
+
+            btnGenerateUsername = CreateIconButton("🔀", iconSize);
+            btnGenerateUsername.BackColor = AppTheme.Surface;
+            btnGenerateUsername.Click += BtnGenerateUsername_Click;
+            var generateUsernameTip = new ToolTip();
+            generateUsernameTip.SetToolTip(btnGenerateUsername, "Generate username");
 
             txtPassword = new TextBox { PlaceholderText = "Password", BorderStyle = BorderStyle.None, PasswordChar = '*', Font = AppTheme.Base, BackColor = AppTheme.Surface };
             txtRepeatPassword = new TextBox { PlaceholderText = "Repeat Password", BorderStyle = BorderStyle.None, PasswordChar = '*', Font = AppTheme.Base, BackColor = AppTheme.Surface, Enabled = false };
@@ -206,11 +213,13 @@ namespace PasswordManager
             txtPassword.TextChanged += TxtPassword_TextChanged; // Update strength when password changes
             txtRepeatPassword.TextChanged += TxtRepeatPassword_TextChanged; // Check match on repeat password text change
 
-            // Username row: bordered field + manage-usernames control inside the box.
+            // Username row: [ bordered field + manage ] [ generate username ]
             btnManageUsernames.BackColor = AppTheme.Surface;
-            var usernameRow = DialogControls.CreateBorderedFieldRow(txtUsername, btnManageUsernames);
+            btnGenerateUsername.BackColor = AppTheme.Background;
+            var usernameFieldBox = DialogControls.CreateBorderedFieldRow(txtUsername, btnManageUsernames);
+            usernameFieldBox.Dock = DockStyle.Fill;
             // Keep the combo stretched to the full bordered-row height (native arrow scales better when taller).
-            usernameRow.Layout += (s, e) =>
+            usernameFieldBox.Layout += (s, e) =>
             {
                 if (txtUsername.Parent != null)
                 {
@@ -221,6 +230,15 @@ namespace PasswordManager
                     }
                 }
             };
+
+            var usernameRow = new Panel { BackColor = AppTheme.Background };
+            usernameRow.Controls.Add(usernameFieldBox);
+            btnGenerateUsername.Dock = DockStyle.Right;
+            btnGenerateUsername.Width = iconSize + 4;
+            // Small gap between field and generate button
+            var usernameGap = new Panel { Dock = DockStyle.Right, Width = 6, BackColor = AppTheme.Background };
+            usernameRow.Controls.Add(usernameGap);
+            usernameRow.Controls.Add(btnGenerateUsername);
 
             // Password row: [ bordered field + regenerate + eye ] [ Generate ▾ ]
             btnTogglePasswordVisibility.BackColor = AppTheme.Surface;
@@ -595,6 +613,7 @@ namespace PasswordManager
             // Icon/action buttons sit in the same rows as the fields - skip them on Tab
             // so Tab moves field-to-field instead of stopping on every toolbar icon.
             btnManageUsernames.TabStop = false;
+            btnGenerateUsername.TabStop = false;
             btnGeneratePassword.TabStop = false;
             btnRegeneratePassword.TabStop = false;
             btnGenerationSettings.TabStop = false;
@@ -1001,10 +1020,23 @@ namespace PasswordManager
                 var mousePos = Control.MousePosition;
                 manageForm.StartPosition = FormStartPosition.Manual;
                 manageForm.Location = new System.Drawing.Point(mousePos.X, mousePos.Y);
-                manageForm.ShowDialog();
+                manageForm.ShowDialog(this);
             }
 
             RefreshUsernameSuggestions(); // Pick up any changes made in the manage dialog
+        }
+
+        private void BtnGenerateUsername_Click(object sender, EventArgs e)
+        {
+            using (var form = new GenerateUsernameForm())
+            {
+                if (form.ShowDialog(this) == DialogResult.OK && !string.IsNullOrWhiteSpace(form.SelectedUsername))
+                {
+                    txtUsername.Text = form.SelectedUsername;
+                    txtUsername.Focus();
+                    txtUsername.SelectionStart = txtUsername.Text.Length;
+                }
+            }
         }
 
         /// Builds one "label above field" group for this form's stacked layout - the same
