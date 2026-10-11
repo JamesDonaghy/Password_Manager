@@ -36,6 +36,9 @@ namespace PasswordManager
         private Label lblSecurityRightHint;
         private Panel securityIssueEntriesHost;
         private PasswordHealth.IssueKind? activeSecurityIssue;
+        /// Inset panels for Security Issues rows — used to apply the purple selection highlight.
+        private readonly Dictionary<PasswordHealth.IssueKind, Panel> securityIssueRowInsets = new Dictionary<PasswordHealth.IssueKind, Panel>();
+        private readonly Dictionary<PasswordHealth.IssueKind, Panel> securityIssueRowBorders = new Dictionary<PasswordHealth.IssueKind, Panel>();
         private Panel settingsMiddlePanel;
         private Panel settingsRightPanel;
         private Panel generatorMiddlePanel;
@@ -1854,11 +1857,11 @@ namespace PasswordManager
         {
             var sectionLabel = new Label
             {
-                Text = "SECURITY ISSUES",
+                Text = "Security Issues",
                 Dock = DockStyle.Top,
-                Height = 22,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 8.5f, System.Drawing.FontStyle.Bold),
-                ForeColor = AppTheme.TextSecondary,
+                Height = 28,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.BottomLeft
             };
 
@@ -1868,6 +1871,9 @@ namespace PasswordManager
             lblIssueReusedCount = new Label();
             lblIssueWeakCount = new Label();
             lblIssueOldCount = new Label();
+
+            securityIssueRowInsets.Clear();
+            securityIssueRowBorders.Clear();
 
             var reusedRow = CreateSecurityIssueRow(
                 "Reused Passwords",
@@ -1885,19 +1891,17 @@ namespace PasswordManager
                 lblIssueOldCount,
                 PasswordHealth.IssueKind.Old);
 
-            var stack = new Panel { Dock = DockStyle.Top, Height = 22 + 56 * 3 + 2, BackColor = AppTheme.Surface };
-            // reverse dock order
+            var stack = new Panel { Dock = DockStyle.Top, Height = 28 + 56 * 3, BackColor = AppTheme.Surface };
+            // reverse dock order — full-width issue buttons, no dividers between cards
             stack.Controls.Add(oldRow);
-            stack.Controls.Add(CreateInsetDivider());
             stack.Controls.Add(weakRow);
-            stack.Controls.Add(CreateInsetDivider());
             stack.Controls.Add(reusedRow);
             stack.Controls.Add(sectionLabel);
 
             var inset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10) };
             inset.Controls.Add(stack);
 
-            int cardHeight = 22 + 56 * 3 + 24;
+            int cardHeight = 28 + 56 * 3 + 24;
             var border = new Panel { Dock = DockStyle.Top, Height = cardHeight, BackColor = AppTheme.Border, Padding = new Padding(1) };
             border.Controls.Add(inset);
             return new Panel { Dock = DockStyle.Top, Height = cardHeight + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16), Controls = { border } };
@@ -1905,41 +1909,158 @@ namespace PasswordManager
 
         private Panel CreateSecurityIssueRow(string title, Label descLabel, Label countLabel, PasswordHealth.IssueKind kind)
         {
+            // Full-row clickable card (matches Security Issues as buttons in the reference UI).
+            string icon = kind switch
+            {
+                PasswordHealth.IssueKind.Reused => "⚠",
+                PasswordHealth.IssueKind.Weak => "⚠",
+                _ => "ℹ"
+            };
+            var iconColor = kind switch
+            {
+                PasswordHealth.IssueKind.Reused => System.Drawing.Color.FromArgb(0xC0, 0x3A, 0x3A),
+                PasswordHealth.IssueKind.Weak => System.Drawing.Color.FromArgb(0xC4, 0x8A, 0x1A),
+                _ => AppTheme.TextSecondary
+            };
+            var iconBg = kind switch
+            {
+                PasswordHealth.IssueKind.Reused => System.Drawing.Color.FromArgb(0xFD, 0xEB, 0xEB),
+                PasswordHealth.IssueKind.Weak => System.Drawing.Color.FromArgb(0xFE, 0xF3, 0xC7),
+                _ => AppTheme.PanelBackground
+            };
+
+            var iconLbl = new Label
+            {
+                Text = icon,
+                Dock = DockStyle.Fill,
+                Font = AppTheme.Base,
+                ForeColor = iconColor,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = iconBg
+            };
+            var iconTile = new Panel
+            {
+                Dock = DockStyle.Left,
+                Width = 28,
+                BackColor = iconBg,
+                Padding = new Padding(0)
+            };
+            iconTile.Controls.Add(iconLbl);
+
             var titleLbl = new Label
             {
                 Text = title,
                 Dock = DockStyle.Top,
-                Height = 22,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
-                ForeColor = AppTheme.TextPrimary
+                Height = 18,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Surface,
+                Cursor = Cursors.Hand
             };
             descLabel.Dock = DockStyle.Top;
-            descLabel.Height = 20;
+            descLabel.Height = 16;
             descLabel.Font = AppTheme.Base;
             descLabel.ForeColor = AppTheme.TextSecondary;
+            descLabel.BackColor = AppTheme.Surface;
+            descLabel.Cursor = Cursors.Hand;
             descLabel.Text = PasswordHealth.DescriptionFor(kind, 0);
 
-            var textStack = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            var textStack = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(8, 0, 6, 0), Cursor = Cursors.Hand };
             textStack.Controls.Add(descLabel);
             textStack.Controls.Add(titleLbl);
 
-            countLabel.Dock = DockStyle.Right;
-            countLabel.Width = 36;
-            countLabel.Font = AppTheme.Base;
-            countLabel.ForeColor = AppTheme.TextSecondary;
-            countLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            countLabel.AutoSize = false;
+            countLabel.Dock = DockStyle.Fill;
+            countLabel.Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f, System.Drawing.FontStyle.Bold);
+            countLabel.ForeColor = iconColor;
+            countLabel.BackColor = iconBg;
+            countLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             countLabel.Text = "0";
+            countLabel.Cursor = Cursors.Hand;
 
-            // Compact button: Dock=Right alone stretches to full row height, so host it.
-            var viewBtn = DialogControls.CreateInlineActionButton("View Entries ›", 102, 26);
-            viewBtn.Click += (s, e) => ShowSecurityIssue(kind);
-            var viewHost = CreateRightAlignedControlHost(viewBtn, 108, 26);
+            // Fixed-size badge, vertically centered in the row via host Resize.
+            var countBadge = new Panel
+            {
+                Width = 26,
+                Height = 22,
+                BackColor = iconBg,
+                Cursor = Cursors.Hand
+            };
+            countBadge.Controls.Add(countLabel);
 
-            var row = new Panel { Dock = DockStyle.Top, Height = 56, BackColor = AppTheme.Surface, Padding = new Padding(4, 6, 4, 6) };
-            row.Controls.Add(textStack);
-            row.Controls.Add(countLabel);
-            row.Controls.Add(viewHost);
-            return row;
+            var countHost = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = 32,
+                BackColor = AppTheme.Surface,
+                Cursor = Cursors.Hand
+            };
+            countHost.Controls.Add(countBadge);
+            countHost.Resize += (s, e) =>
+            {
+                countBadge.Left = Math.Max(0, (countHost.ClientSize.Width - countBadge.Width) / 2);
+                countBadge.Top = Math.Max(0, (countHost.ClientSize.Height - countBadge.Height) / 2);
+            };
+
+            var chevron = new Label
+            {
+                Text = "›",
+                Dock = DockStyle.Right,
+                Width = 18,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.Surface,
+                Cursor = Cursors.Hand
+            };
+
+            var inset = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(8, 6, 6, 6),
+                Cursor = Cursors.Hand
+            };
+            inset.Controls.Add(textStack);
+            inset.Controls.Add(countHost);
+            inset.Controls.Add(chevron);
+            inset.Controls.Add(iconTile);
+
+            var border = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 50,
+                BackColor = AppTheme.Border,
+                Padding = new Padding(1),
+                Cursor = Cursors.Hand
+            };
+            border.Controls.Add(inset);
+
+            EventHandler open = (s, e) => ShowSecurityIssue(kind);
+            WireClickRecursive(border, open);
+            AttachAccentHover(inset, preserveIconAndBadge: true);
+
+            securityIssueRowInsets[kind] = inset;
+            securityIssueRowBorders[kind] = border;
+
+            return new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 56,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(0, 0, 0, 6),
+                Controls = { border }
+            };
+        }
+
+        /// Attaches the same click handler to a control and all descendants so a full card is clickable.
+        private static void WireClickRecursive(Control root, EventHandler handler)
+        {
+            root.Click += handler;
+            foreach (Control child in root.Controls)
+            {
+                WireClickRecursive(child, handler);
+            }
         }
 
         /// Hosts a fixed-size control on the right of a row without stretching it to the
@@ -1986,14 +2107,27 @@ namespace PasswordManager
                 ForeColor = AppTheme.TextSecondary
             };
 
-            // Master password row
+            // Master password — full clickable row with chevron
+            var mpIcon = new Label
+            {
+                Text = "🔒",
+                Dock = DockStyle.Fill,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.AccentSubtle,
+                Font = AppTheme.Base
+            };
+            var mpIconTile = new Panel { Dock = DockStyle.Left, Width = 36, BackColor = AppTheme.AccentSubtle };
+            mpIconTile.Controls.Add(mpIcon);
+
             var mpTitle = new Label
             {
                 Text = "Master Password",
                 Dock = DockStyle.Top,
                 Height = 20,
                 Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
-                ForeColor = AppTheme.TextPrimary
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Surface,
+                Cursor = Cursors.Hand
             };
             var mpDesc = new Label
             {
@@ -2001,26 +2135,58 @@ namespace PasswordManager
                 Dock = DockStyle.Top,
                 Height = 18,
                 Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary
+                ForeColor = AppTheme.TextSecondary,
+                BackColor = AppTheme.Surface,
+                Cursor = Cursors.Hand
             };
-            var mpText = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            var mpText = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(10, 2, 8, 0), Cursor = Cursors.Hand };
             mpText.Controls.Add(mpDesc);
             mpText.Controls.Add(mpTitle);
-            var mpBtn = DialogControls.CreateInlineActionButton("Change Master Password ›", 168, 26);
-            mpBtn.Click += ChangeMasterPassword_Click;
-            var mpHost = CreateRightAlignedControlHost(mpBtn, 176, 26);
-            var mpRow = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = AppTheme.Surface, Padding = new Padding(4, 6, 4, 6) };
-            mpRow.Controls.Add(mpText);
-            mpRow.Controls.Add(mpHost);
 
-            // Auto-lock row
+            var mpChevron = new Label
+            {
+                Text = "›",
+                Dock = DockStyle.Right,
+                Width = 22,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 14f),
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.Surface,
+                Cursor = Cursors.Hand
+            };
+
+            var mpInset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(10, 8, 8, 8), Cursor = Cursors.Hand };
+            mpInset.Controls.Add(mpText);
+            mpInset.Controls.Add(mpChevron);
+            mpInset.Controls.Add(mpIconTile);
+
+            var mpBorder = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = AppTheme.Border, Padding = new Padding(1), Cursor = Cursors.Hand };
+            mpBorder.Controls.Add(mpInset);
+            WireClickRecursive(mpBorder, ChangeMasterPassword_Click);
+            AttachAccentHover(mpInset, preserveIconAndBadge: false);
+
+            var mpRow = new Panel { Dock = DockStyle.Top, Height = 66, BackColor = AppTheme.Surface, Padding = new Padding(0, 0, 0, 8), Controls = { mpBorder } };
+
+            // Auto-lock row — dropdown in a clear bordered chip
+            var alIcon = new Label
+            {
+                Text = "⏱",
+                Dock = DockStyle.Fill,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.PanelBackground,
+                Font = AppTheme.Base
+            };
+            var alIconTile = new Panel { Dock = DockStyle.Left, Width = 36, BackColor = AppTheme.PanelBackground };
+            alIconTile.Controls.Add(alIcon);
+
             var alTitle = new Label
             {
                 Text = "Auto-Lock",
                 Dock = DockStyle.Top,
                 Height = 20,
                 Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
-                ForeColor = AppTheme.TextPrimary
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Surface
             };
             var alDesc = new Label
             {
@@ -2028,16 +2194,17 @@ namespace PasswordManager
                 Dock = DockStyle.Top,
                 Height = 18,
                 Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary
+                ForeColor = AppTheme.TextSecondary,
+                BackColor = AppTheme.Surface
             };
-            var alText = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            var alText = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(10, 2, 8, 0) };
             alText.Controls.Add(alDesc);
             alText.Controls.Add(alTitle);
 
             var cmbAutoLock = new ComboBox
             {
-                Width = 110,
-                Height = 22,
+                Width = 108,
+                Height = 24,
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 FlatStyle = FlatStyle.Flat,
                 Font = AppTheme.Base,
@@ -2061,24 +2228,54 @@ namespace PasswordManager
                     lastActivityUtc = DateTime.UtcNow;
                 }
             };
-            cmbAutoLock.Height = 26;
-            var alHost = CreateRightAlignedControlHost(cmbAutoLock, 118, 26);
 
-            var alRow = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = AppTheme.Surface, Padding = new Padding(4, 6, 4, 6) };
-            alRow.Controls.Add(alText);
-            alRow.Controls.Add(alHost);
+            // Bordered chip around the dropdown so it reads as a control, not floating text.
+            var comboInset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(6, 2, 4, 2) };
+            cmbAutoLock.Dock = DockStyle.Fill;
+            comboInset.Controls.Add(cmbAutoLock);
+            var comboBorder = new Panel
+            {
+                Width = 124,
+                Height = 28,
+                BackColor = AppTheme.Border,
+                Padding = new Padding(1)
+            };
+            comboBorder.Controls.Add(comboInset);
+
+            var alHost = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = 132,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(0, 12, 4, 0)
+            };
+            alHost.Controls.Add(comboBorder);
+            alHost.Resize += (s, e) =>
+            {
+                comboBorder.Left = Math.Max(0, alHost.ClientSize.Width - comboBorder.Width - 4);
+                comboBorder.Top = Math.Max(0, (alHost.ClientSize.Height - comboBorder.Height) / 2);
+            };
+
+            var alInset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(10, 8, 8, 8) };
+            alInset.Controls.Add(alText);
+            alInset.Controls.Add(alHost);
+            alInset.Controls.Add(alIconTile);
+
+            var alBorder = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            alBorder.Controls.Add(alInset);
+
+            var alRow = new Panel { Dock = DockStyle.Top, Height = 66, BackColor = AppTheme.Surface, Padding = new Padding(0, 0, 0, 0), Controls = { alBorder } };
 
             var header = new Panel { Dock = DockStyle.Top, Height = 48, BackColor = AppTheme.Surface };
             header.Controls.Add(sectionSub);
             header.Controls.Add(sectionLabel);
 
-            var stack = new Panel { Dock = DockStyle.Top, Height = 48 + 52 + 1 + 52, BackColor = AppTheme.Surface };
+            var stack = new Panel { Dock = DockStyle.Top, Height = 48 + 66 + 66, BackColor = AppTheme.Surface };
             stack.Controls.Add(alRow);
-            stack.Controls.Add(CreateInsetDivider());
             stack.Controls.Add(mpRow);
             stack.Controls.Add(header);
 
-            int cardHeight = 48 + 52 + 1 + 52 + 24;
+            int cardHeight = 48 + 66 + 66 + 24;
             var inset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10) };
             inset.Controls.Add(stack);
             var border = new Panel { Dock = DockStyle.Top, Height = cardHeight, BackColor = AppTheme.Border, Padding = new Padding(1) };
@@ -2123,6 +2320,7 @@ namespace PasswordManager
             }
 
             securityIssueEntriesHost?.Controls.Clear();
+            UpdateSecurityIssueHighlights();
         }
 
         private void ShowSecurityIssue(PasswordHealth.IssueKind kind)
@@ -2144,6 +2342,95 @@ namespace PasswordManager
             for (int i = entries.Count - 1; i >= 0; i--)
             {
                 securityIssueEntriesHost.Controls.Add(CreateSecurityIssueEntryRow(entries[i]));
+            }
+
+            UpdateSecurityIssueHighlights();
+        }
+
+        /// Reserved for future selected-state styling; hover is handled by AttachAccentHover.
+        private void UpdateSecurityIssueHighlights()
+        {
+        }
+
+        /// Purple hover tint (AccentSubtle), same approach as CreateSettingsActionRow / nav rows.
+        /// When preserveIconAndBadge is true, status icon tiles and count badges keep their colours.
+        private static void AttachAccentHover(Control root, bool preserveIconAndBadge)
+        {
+            void Apply(System.Drawing.Color color)
+            {
+                ApplyHoverBackColor(root, color, preserveIconAndBadge);
+            }
+
+            EventHandler hoverOn = (s, e) => Apply(AppTheme.AccentSubtle);
+            EventHandler hoverOff = (s, e) =>
+            {
+                // Only clear when the pointer has truly left the card (not moved onto a child).
+                var pos = root.PointToClient(Control.MousePosition);
+                if (!root.ClientRectangle.Contains(pos))
+                {
+                    Apply(AppTheme.Surface);
+                }
+            };
+
+            WireHoverRecursive(root, hoverOn, hoverOff);
+        }
+
+        private static void WireHoverRecursive(Control root, EventHandler enter, EventHandler leave)
+        {
+            root.MouseEnter += enter;
+            root.MouseLeave += leave;
+            foreach (Control child in root.Controls)
+            {
+                WireHoverRecursive(child, enter, leave);
+            }
+        }
+
+        private static void ApplyHoverBackColor(Control root, System.Drawing.Color backColor, bool preserveIconAndBadge)
+        {
+            if (preserveIconAndBadge)
+            {
+                // Status icon glyph
+                if (root is Label lbl
+                    && lbl.TextAlign == System.Drawing.ContentAlignment.MiddleCenter
+                    && (lbl.Text == "⚠" || lbl.Text == "ℹ"))
+                {
+                    return;
+                }
+
+                // Count number label inside the badge
+                bool isCountBadgeLabel = root is Label count
+                    && count.Font.Bold
+                    && count.TextAlign == System.Drawing.ContentAlignment.MiddleCenter
+                    && int.TryParse(count.Text, out _);
+                if (isCountBadgeLabel)
+                {
+                    return;
+                }
+
+                // Status icon tile (fixed tint behind the glyph)
+                if (root is Panel p && p.Controls.Count == 1 && p.Controls[0] is Label icon
+                    && icon.TextAlign == System.Drawing.ContentAlignment.MiddleCenter
+                    && (icon.Text == "⚠" || icon.Text == "ℹ"))
+                {
+                    return;
+                }
+
+                // Fixed-size count badge chip only — the outer host still receives the hover tint
+                // so there is no white box around the number.
+                if (root is Panel badgeChip
+                    && badgeChip.Controls.Count == 1
+                    && badgeChip.Controls[0] is Label badgeLbl
+                    && badgeLbl.Font.Bold
+                    && int.TryParse(badgeLbl.Text, out _))
+                {
+                    return;
+                }
+            }
+
+            root.BackColor = backColor;
+            foreach (Control child in root.Controls)
+            {
+                ApplyHoverBackColor(child, backColor, preserveIconAndBadge);
             }
         }
 
