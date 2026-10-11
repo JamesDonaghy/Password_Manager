@@ -26,6 +26,11 @@ namespace PasswordManager
         private Label lblHealthReusedCount;
         private Label lblHealthWeakCount;
         private Label lblHealthOldCount;
+        private Label lblHealthSecureSummary;
+        private Panel pnlHealthSecureFill;
+        private Panel healthSecureTrack;
+        private Panel healthRingPanel;
+        private float healthSecureRatio;
         private Label lblIssueReusedDesc;
         private Label lblIssueWeakDesc;
         private Label lblIssueOldDesc;
@@ -1762,69 +1767,334 @@ namespace PasswordManager
             {
                 Text = "Password Health",
                 Dock = DockStyle.Top,
-                Height = 24,
+                Height = 22,
                 Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10.5f, System.Drawing.FontStyle.Bold),
-                ForeColor = AppTheme.TextPrimary
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
-            var subtitle = new Label
+
+            const int ringSize = 140;
+            const int bodyHeight = 150;
+            const int pillsLeft = 168;
+
+            var body = new Panel
             {
-                Text = "Check your vault for common security issues.",
                 Dock = DockStyle.Top,
-                Height = 20,
-                Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary
+                Height = bodyHeight,
+                BackColor = AppTheme.Surface
             };
+
+            healthRingPanel = new Panel
+            {
+                Size = new System.Drawing.Size(ringSize, ringSize),
+                Location = new System.Drawing.Point(4, 0),
+                BackColor = AppTheme.Surface
+            };
+            healthRingPanel.Paint += HealthRingPanel_Paint;
 
             lblHealthTotal = new Label
             {
                 Text = "0",
-                Dock = DockStyle.Top,
-                Height = 36,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 22f, System.Drawing.FontStyle.Bold),
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.BottomCenter
+                Visible = false
             };
-            var totalCaption = new Label
+            healthRingPanel.Controls.Add(lblHealthTotal);
+            body.Controls.Add(healthRingPanel);
+
+            lblHealthReusedCount = CreateHealthPillCountLabel();
+            lblHealthWeakCount = CreateHealthPillCountLabel();
+            lblHealthOldCount = CreateHealthPillCountLabel();
+            lblHealthExposedCount = new Label { Visible = false };
+
+            var reusedPill = CreateHealthStatPill(
+                "⚠",
+                lblHealthReusedCount,
+                "reused\npasswords",
+                System.Drawing.Color.FromArgb(0xC0, 0x3A, 0x3A),
+                System.Drawing.Color.FromArgb(0xFD, 0xEB, 0xEB));
+            var weakPill = CreateHealthStatPill(
+                "⚠",
+                lblHealthWeakCount,
+                "weak\npasswords",
+                System.Drawing.Color.FromArgb(0xC4, 0x8A, 0x1A),
+                System.Drawing.Color.FromArgb(0xFE, 0xF3, 0xC7));
+            var oldPill = CreateHealthStatPill(
+                "ℹ",
+                lblHealthOldCount,
+                "old\npasswords",
+                AppTheme.TextSecondary,
+                AppTheme.PanelBackground);
+
+            int pillTop = 18;
+            body.Controls.Add(reusedPill);
+            body.Controls.Add(weakPill);
+            body.Controls.Add(oldPill);
+
+            int secureTop = pillTop + reusedPill.Height + 6;
+
+            var shieldIcon = new Label
             {
-                Text = "vault entries",
-                Dock = DockStyle.Top,
-                Height = 20,
+                Text = "🛡",
+                Size = new System.Drawing.Size(18, 16),
+                Font = AppTheme.Base,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.Surface
+            };
+            lblHealthSecureSummary = new Label
+            {
+                Text = "0 entries are secure",
+                Height = 16,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextSecondary,
-                TextAlign = System.Drawing.ContentAlignment.TopCenter
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                BackColor = AppTheme.Surface
             };
-            var totalCol = new Panel { Dock = DockStyle.Left, Width = 110, BackColor = AppTheme.Surface, Padding = new Padding(8, 8, 8, 8) };
-            totalCol.Controls.Add(totalCaption);
-            totalCol.Controls.Add(lblHealthTotal);
 
-            lblHealthExposedCount = new Label { Text = "0", Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
-            lblHealthReusedCount = new Label { Text = "0", Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
-            lblHealthWeakCount = new Label { Text = "0", Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
-            lblHealthOldCount = new Label { Text = "0", Dock = DockStyle.Right, Width = 36, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
+            // Painted rounded bar (no child fill panel) — matches the reference pill-shaped track.
+            healthSecureTrack = new Panel
+            {
+                Height = 10,
+                BackColor = AppTheme.Surface
+            };
+            healthSecureTrack.Paint += SecureTrack_Paint;
+            // Kept for compatibility with older layout math.
+            pnlHealthSecureFill = new Panel { Visible = false, Width = 0, Height = 10 };
+            var secureTrack = healthSecureTrack;
 
-            var statsStack = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(12, 4, 8, 4) };
-            // Dock=Top stacks reverse of add order — add bottom row first.
-            statsStack.Controls.Add(CreateHealthStatRow("⚠", "Old passwords", lblHealthOldCount, System.Drawing.Color.DarkOrange));
-            statsStack.Controls.Add(CreateHealthStatRow("⚠", "Weak passwords", lblHealthWeakCount, System.Drawing.Color.DarkOrange));
-            statsStack.Controls.Add(CreateHealthStatRow("⚠", "Reused passwords", lblHealthReusedCount, System.Drawing.Color.DarkOrange));
-            statsStack.Controls.Add(CreateHealthStatRow("✓", "No exposed passwords", lblHealthExposedCount, System.Drawing.Color.SeaGreen));
+            body.Controls.Add(shieldIcon);
+            body.Controls.Add(lblHealthSecureSummary);
+            body.Controls.Add(secureTrack);
 
-            var body = new Panel { Dock = DockStyle.Top, Height = 120, BackColor = AppTheme.Surface };
-            body.Controls.Add(statsStack);
-            body.Controls.Add(totalCol);
+            void LayoutHealthBody()
+            {
+                int rightPad = 8;
+                int available = Math.Max(200, body.ClientSize.Width - pillsLeft - rightPad);
+                int gap = 12;
+                int pillWidth = Math.Max(88, (available - gap * 2) / 3);
 
-            var header = new Panel { Dock = DockStyle.Top, Height = 48, BackColor = AppTheme.Surface };
-            header.Controls.Add(subtitle);
-            header.Controls.Add(title);
+                reusedPill.Size = new System.Drawing.Size(pillWidth, reusedPill.Height);
+                weakPill.Size = new System.Drawing.Size(pillWidth, weakPill.Height);
+                oldPill.Size = new System.Drawing.Size(pillWidth, oldPill.Height);
 
-            const int cardHeight = 48 + 120 + 32;
-            var inset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(16, 12, 16, 12) };
+                reusedPill.Location = new System.Drawing.Point(pillsLeft, pillTop);
+                weakPill.Location = new System.Drawing.Point(pillsLeft + pillWidth + gap, pillTop);
+                oldPill.Location = new System.Drawing.Point(pillsLeft + (pillWidth + gap) * 2, pillTop);
+
+                int secureLeft = pillsLeft - 4;
+                // Stretch bar almost to the right edge of the health card body.
+                int secureWidth = Math.Max(120, body.ClientSize.Width - secureLeft - rightPad);
+
+                shieldIcon.Location = new System.Drawing.Point(secureLeft, secureTop);
+                lblHealthSecureSummary.Location = new System.Drawing.Point(secureLeft + 18, secureTop);
+                lblHealthSecureSummary.Width = Math.Max(80, secureWidth - 20);
+
+                secureTrack.Location = new System.Drawing.Point(secureLeft, secureTop + 18);
+                secureTrack.Width = secureWidth;
+                secureTrack.Height = 10;
+                UpdateHealthSecureBarWidth();
+                secureTrack.Invalidate();
+            }
+
+            body.Resize += (s, e) => LayoutHealthBody();
+            LayoutHealthBody();
+
+            var inset = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(14, 6, 14, 6)
+            };
             inset.Controls.Add(body);
-            inset.Controls.Add(header);
+            inset.Controls.Add(title);
 
-            var border = new Panel { Dock = DockStyle.Top, Height = cardHeight, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            const int cardHeight = 22 + bodyHeight + 14;
+            var border = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = cardHeight,
+                BackColor = AppTheme.Border,
+                Padding = new Padding(1)
+            };
             border.Controls.Add(inset);
-            return new Panel { Dock = DockStyle.Top, Height = cardHeight + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16), Controls = { border } };
+            return new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = cardHeight + 10,
+                BackColor = AppTheme.Background,
+                Padding = new Padding(0, 0, 0, 10),
+                Controls = { border }
+            };
+        }
+
+        private static Label CreateHealthPillCountLabel()
+        {
+            return new Label
+            {
+                Text = "0",
+                AutoSize = false,
+                Dock = DockStyle.Fill,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f, System.Drawing.FontStyle.Bold),
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                BackColor = System.Drawing.Color.Transparent
+            };
+        }
+
+        private static Panel CreateHealthStatPill(
+            string icon,
+            Label countLabel,
+            string caption,
+            System.Drawing.Color accent,
+            System.Drawing.Color background)
+        {
+            countLabel.ForeColor = accent;
+            countLabel.BackColor = background;
+
+            var iconLbl = new Label
+            {
+                Text = icon,
+                AutoSize = false,
+                Dock = DockStyle.Left,
+                Width = 18,
+                Font = AppTheme.Base,
+                ForeColor = accent,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                BackColor = background
+            };
+
+            var topRow = new Panel { Dock = DockStyle.Top, Height = 22, BackColor = background };
+            topRow.Controls.Add(countLabel);
+            topRow.Controls.Add(iconLbl);
+
+            var captionLbl = new Label
+            {
+                Text = caption,
+                Dock = DockStyle.Fill,
+                Font = AppTheme.Caption,
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.TopLeft,
+                BackColor = background
+            };
+
+            var pill = new Panel
+            {
+                Size = new System.Drawing.Size(92, 70),
+                BackColor = background,
+                Padding = new Padding(10, 8, 10, 6)
+            };
+            pill.Controls.Add(captionLbl);
+            pill.Controls.Add(topRow);
+            return pill;
+        }
+
+        private void HealthRingPanel_Paint(object sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+            const int thickness = 13;
+            int pad = thickness;
+            var rect = new System.Drawing.Rectangle(
+                pad,
+                pad,
+                healthRingPanel.ClientSize.Width - pad * 2,
+                healthRingPanel.ClientSize.Height - pad * 2);
+
+            using (var track = new System.Drawing.Pen(AppTheme.PanelBackground, thickness))
+            {
+                track.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                track.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                g.DrawEllipse(track, rect);
+            }
+
+            float ratio = Math.Max(0f, Math.Min(1f, healthSecureRatio));
+            if (ratio > 0.001f)
+            {
+                using (var arc = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0x34, 0xC7, 0x59), thickness))
+                {
+                    arc.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                    arc.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                    g.DrawArc(arc, rect, -90f, 360f * ratio);
+                }
+            }
+
+            // Centre text drawn into the hole — avoids opaque Label backgrounds clipping the ring.
+            string totalText = lblHealthTotal?.Text ?? "0";
+            var center = new System.Drawing.Rectangle(0, 0, healthRingPanel.ClientSize.Width, healthRingPanel.ClientSize.Height);
+            using (var numberFont = new System.Drawing.Font(AppTheme.Base.FontFamily, 24f, System.Drawing.FontStyle.Bold))
+            using (var captionFont = AppTheme.Caption)
+            using (var numberBrush = new System.Drawing.SolidBrush(AppTheme.TextPrimary))
+            using (var captionBrush = new System.Drawing.SolidBrush(AppTheme.TextSecondary))
+            using (var sf = new System.Drawing.StringFormat
+            {
+                Alignment = System.Drawing.StringAlignment.Center,
+                LineAlignment = System.Drawing.StringAlignment.Center
+            })
+            {
+                var numberRect = new System.Drawing.Rectangle(center.X, center.Y - 10, center.Width, center.Height);
+                g.DrawString(totalText, numberFont, numberBrush, numberRect, sf);
+                var captionRect = new System.Drawing.Rectangle(center.X, center.Y + 18, center.Width, center.Height);
+                g.DrawString("total entries", captionFont, captionBrush, captionRect, sf);
+            }
+        }
+
+        private void UpdateHealthSecureBarWidth()
+        {
+            healthSecureTrack?.Invalidate();
+        }
+
+        private void SecureTrack_Paint(object sender, PaintEventArgs e)
+        {
+            if (healthSecureTrack == null)
+            {
+                return;
+            }
+
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            int w = healthSecureTrack.ClientSize.Width;
+            int h = healthSecureTrack.ClientSize.Height;
+            if (w <= 0 || h <= 0)
+            {
+                return;
+            }
+
+            var trackRect = new System.Drawing.Rectangle(0, 0, w - 1, h - 1);
+            float radius = h / 2f;
+
+            using (var trackPath = CreateRoundedRectPath(trackRect, radius))
+            using (var trackBrush = new System.Drawing.SolidBrush(AppTheme.PanelBackground))
+            {
+                g.FillPath(trackBrush, trackPath);
+            }
+
+            float ratio = Math.Max(0f, Math.Min(1f, healthSecureRatio));
+            int fillWidth = (int)Math.Round((w - 1) * ratio);
+            if (fillWidth > 1)
+            {
+                // Minimum width so the capsule ends stay rounded.
+                fillWidth = Math.Max(fillWidth, h);
+                fillWidth = Math.Min(fillWidth, w - 1);
+                var fillRect = new System.Drawing.Rectangle(0, 0, fillWidth, h - 1);
+                using (var fillPath = CreateRoundedRectPath(fillRect, radius))
+                using (var fillBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0x34, 0xC7, 0x59)))
+                {
+                    g.FillPath(fillBrush, fillPath);
+                }
+            }
+        }
+
+        private static System.Drawing.Drawing2D.GraphicsPath CreateRoundedRectPath(System.Drawing.Rectangle bounds, float radius)
+        {
+            float r = Math.Max(1f, Math.Min(radius, Math.Min(bounds.Width, bounds.Height) / 2f));
+            float d = r * 2f;
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
+            path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
+            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+            path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private static Panel CreateHealthStatRow(string icon, string text, Label countLabel, System.Drawing.Color iconColor)
@@ -2292,10 +2562,30 @@ namespace PasswordManager
 
             var report = PasswordHealth.Analyze(accounts);
             lblHealthTotal.Text = report.TotalEntries.ToString();
-            lblHealthExposedCount.Text = report.ExposedCount.ToString();
+            healthRingPanel?.Invalidate();
+            if (lblHealthExposedCount != null)
+            {
+                lblHealthExposedCount.Text = report.ExposedCount.ToString();
+            }
             lblHealthReusedCount.Text = report.Reused.Count.ToString();
             lblHealthWeakCount.Text = report.Weak.Count.ToString();
             lblHealthOldCount.Text = report.Old.Count.ToString();
+
+            // Unique entries that appear in any issue list.
+            var flagged = new HashSet<Account>();
+            foreach (var a in report.Reused) flagged.Add(a);
+            foreach (var a in report.Weak) flagged.Add(a);
+            foreach (var a in report.Old) flagged.Add(a);
+            int secure = Math.Max(0, report.TotalEntries - flagged.Count);
+            healthSecureRatio = report.TotalEntries <= 0 ? 0f : (float)secure / report.TotalEntries;
+            if (lblHealthSecureSummary != null)
+            {
+                lblHealthSecureSummary.Text = secure == 1
+                    ? "1 entry is secure"
+                    : $"{secure} entries are secure";
+            }
+            healthRingPanel?.Invalidate();
+            UpdateHealthSecureBarWidth();
 
             lblIssueReusedDesc.Text = PasswordHealth.DescriptionFor(PasswordHealth.IssueKind.Reused, report.Reused.Count);
             lblIssueWeakDesc.Text = PasswordHealth.DescriptionFor(PasswordHealth.IssueKind.Weak, report.Weak.Count);
