@@ -31,6 +31,10 @@ namespace PasswordManager
         private Panel healthSecureTrack;
         private Panel healthRingPanel;
         private float healthSecureRatio;
+        /// Priority-assigned ring segments (unique entries): reused > weak > old > secure.
+        private float healthRingReusedRatio;
+        private float healthRingWeakRatio;
+        private float healthRingOldRatio;
         private Label lblIssueReusedDesc;
         private Label lblIssueWeakDesc;
         private Label lblIssueOldDesc;
@@ -1692,11 +1696,8 @@ namespace PasswordManager
             };
             var spacerAfterSubtitle = new Panel { Dock = DockStyle.Top, Height = 14, BackColor = AppTheme.Background };
 
-            // --- Password Health summary card ---
+            // --- Password Health summary card (issue pills open the detail list) ---
             var healthCard = BuildPasswordHealthCard();
-
-            // --- Security Issues rows ---
-            var issuesCard = BuildSecurityIssuesCard();
 
             // --- Security Settings (master password + auto-lock) ---
             var settingsCard = BuildSecuritySettingsCard();
@@ -1704,7 +1705,6 @@ namespace PasswordManager
             var securityContent = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 12) };
             // Dock=Top stacks reverse of add order.
             securityContent.Controls.Add(settingsCard);
-            securityContent.Controls.Add(issuesCard);
             securityContent.Controls.Add(healthCard);
             securityContent.Controls.Add(spacerAfterSubtitle);
             securityContent.Controls.Add(lblSecuritySubtitle);
@@ -1740,7 +1740,7 @@ namespace PasswordManager
 
             lblSecurityRightHint = new Label
             {
-                Text = "Select an issue to see affected entries.",
+                Text = "Select a health category to see affected entries.",
                 Dock = DockStyle.Top,
                 Height = 40,
                 Font = AppTheme.Base,
@@ -1823,6 +1823,10 @@ namespace PasswordManager
                 "old\npasswords",
                 AppTheme.TextSecondary,
                 AppTheme.PanelBackground);
+
+            WireHealthPill(reusedPill, PasswordHealth.IssueKind.Reused);
+            WireHealthPill(weakPill, PasswordHealth.IssueKind.Weak);
+            WireHealthPill(oldPill, PasswordHealth.IssueKind.Old);
 
             int pillTop = 18;
             body.Controls.Add(reusedPill);
@@ -1978,11 +1982,23 @@ namespace PasswordManager
             {
                 Size = new System.Drawing.Size(92, 70),
                 BackColor = background,
-                Padding = new Padding(10, 8, 10, 6)
+                Padding = new Padding(10, 8, 10, 6),
+                Cursor = Cursors.Hand
             };
+            countLabel.Cursor = Cursors.Hand;
+            iconLbl.Cursor = Cursors.Hand;
+            topRow.Cursor = Cursors.Hand;
+            captionLbl.Cursor = Cursors.Hand;
             pill.Controls.Add(captionLbl);
             pill.Controls.Add(topRow);
             return pill;
+        }
+
+        /// Makes a Password Health pill open the same issue detail list as the old Security Issues rows.
+        private void WireHealthPill(Panel pill, PasswordHealth.IssueKind kind)
+        {
+            EventHandler open = (s, e) => ShowSecurityIssue(kind);
+            WireClickRecursive(pill, open);
         }
 
         private void HealthRingPanel_Paint(object sender, PaintEventArgs e)
@@ -2006,16 +2022,30 @@ namespace PasswordManager
                 g.DrawEllipse(track, rect);
             }
 
-            float ratio = Math.Max(0f, Math.Min(1f, healthSecureRatio));
-            if (ratio > 0.001f)
+            // Priority segments clockwise from top: reused (red), weak (yellow), old (grey), secure (green).
+            float start = -90f;
+            void DrawSegment(float ratio, System.Drawing.Color color)
             {
-                using (var arc = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0x34, 0xC7, 0x59), thickness))
+                ratio = Math.Max(0f, Math.Min(1f, ratio));
+                if (ratio <= 0.001f)
                 {
-                    arc.StartCap = System.Drawing.Drawing2D.LineCap.Round;
-                    arc.EndCap = System.Drawing.Drawing2D.LineCap.Round;
-                    g.DrawArc(arc, rect, -90f, 360f * ratio);
+                    return;
                 }
+
+                float sweep = 360f * ratio;
+                using (var pen = new System.Drawing.Pen(color, thickness))
+                {
+                    pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                    pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                    g.DrawArc(pen, rect, start, sweep);
+                }
+                start += sweep;
             }
+
+            DrawSegment(healthRingReusedRatio, System.Drawing.Color.FromArgb(0xE5, 0x4D, 0x4D));
+            DrawSegment(healthRingWeakRatio, System.Drawing.Color.FromArgb(0xE5, 0xB5, 0x3A));
+            DrawSegment(healthRingOldRatio, System.Drawing.Color.FromArgb(0x9C, 0xA3, 0xAF));
+            DrawSegment(healthSecureRatio, System.Drawing.Color.FromArgb(0x34, 0xC7, 0x59));
 
             // Centre text drawn into the hole — avoids opaque Label backgrounds clipping the ring.
             string totalText = lblHealthTotal?.Text ?? "0";
@@ -2571,13 +2601,44 @@ namespace PasswordManager
             lblHealthWeakCount.Text = report.Weak.Count.ToString();
             lblHealthOldCount.Text = report.Old.Count.ToString();
 
-            // Unique entries that appear in any issue list.
-            var flagged = new HashSet<Account>();
-            foreach (var a in report.Reused) flagged.Add(a);
-            foreach (var a in report.Weak) flagged.Add(a);
-            foreach (var a in report.Old) flagged.Add(a);
-            int secure = Math.Max(0, report.TotalEntries - flagged.Count);
-            healthSecureRatio = report.TotalEntries <= 0 ? 0f : (float)secure / report.TotalEntries;
+            // Priority-assign each entry once: reused > weak > old > secure.
+            var reusedSet = new HashSet<Account>(report.Reused);
+            var weakSet = new HashSet<Account>(report.Weak);
+            var oldSet = new HashSet<Account>(report.Old);
+
+            int reusedOnly = 0, weakOnly = 0, oldOnly = 0;
+            if (accounts != null)
+            {
+                foreach (var account in accounts)
+                {
+                    if (reusedSet.Contains(account))
+                    {
+                        reusedOnly++;
+                    }
+                    else if (weakSet.Contains(account))
+                    {
+                        weakOnly++;
+                    }
+                    else if (oldSet.Contains(account))
+                    {
+                        oldOnly++;
+                    }
+                }
+            }
+
+            int total = report.TotalEntries;
+            int secure = Math.Max(0, total - reusedOnly - weakOnly - oldOnly);
+            if (total <= 0)
+            {
+                healthRingReusedRatio = healthRingWeakRatio = healthRingOldRatio = healthSecureRatio = 0f;
+            }
+            else
+            {
+                healthRingReusedRatio = (float)reusedOnly / total;
+                healthRingWeakRatio = (float)weakOnly / total;
+                healthRingOldRatio = (float)oldOnly / total;
+                healthSecureRatio = (float)secure / total;
+            }
             if (lblHealthSecureSummary != null)
             {
                 lblHealthSecureSummary.Text = secure == 1
@@ -2587,12 +2648,7 @@ namespace PasswordManager
             healthRingPanel?.Invalidate();
             UpdateHealthSecureBarWidth();
 
-            lblIssueReusedDesc.Text = PasswordHealth.DescriptionFor(PasswordHealth.IssueKind.Reused, report.Reused.Count);
-            lblIssueWeakDesc.Text = PasswordHealth.DescriptionFor(PasswordHealth.IssueKind.Weak, report.Weak.Count);
-            lblIssueOldDesc.Text = PasswordHealth.DescriptionFor(PasswordHealth.IssueKind.Old, report.Old.Count);
-            lblIssueReusedCount.Text = report.Reused.Count.ToString();
-            lblIssueWeakCount.Text = report.Weak.Count.ToString();
-            lblIssueOldCount.Text = report.Old.Count.ToString();
+            // Security Issues list UI removed; health pills drive ShowSecurityIssue instead.
 
             if (activeSecurityIssue is PasswordHealth.IssueKind kind)
             {
@@ -2606,7 +2662,7 @@ namespace PasswordManager
             if (lblSecurityRightTitle != null)
             {
                 lblSecurityRightTitle.Text = "Password Health";
-                lblSecurityRightHint.Text = "Select an issue to see affected entries.";
+                lblSecurityRightHint.Text = "Select a category above to see affected entries.";
             }
 
             securityIssueEntriesHost?.Controls.Clear();
