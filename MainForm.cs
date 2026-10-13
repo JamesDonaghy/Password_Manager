@@ -48,6 +48,10 @@ namespace PasswordManager
         /// Inset panels for Security Issues rows — used to apply the purple selection highlight.
         private readonly Dictionary<PasswordHealth.IssueKind, Panel> securityIssueRowInsets = new Dictionary<PasswordHealth.IssueKind, Panel>();
         private readonly Dictionary<PasswordHealth.IssueKind, Panel> securityIssueRowBorders = new Dictionary<PasswordHealth.IssueKind, Panel>();
+        /// Password Health issue pills (border + inset) for selected/hover styling.
+        private readonly Dictionary<PasswordHealth.IssueKind, Panel> healthPillBorders = new Dictionary<PasswordHealth.IssueKind, Panel>();
+        private readonly Dictionary<PasswordHealth.IssueKind, Panel> healthPillInsets = new Dictionary<PasswordHealth.IssueKind, Panel>();
+        private readonly Dictionary<PasswordHealth.IssueKind, System.Drawing.Color> healthPillBaseColors = new Dictionary<PasswordHealth.IssueKind, System.Drawing.Color>();
         private Panel settingsMiddlePanel;
         private Panel settingsRightPanel;
         private Panel generatorMiddlePanel;
@@ -1805,6 +1809,10 @@ namespace PasswordManager
             lblHealthOldCount = CreateHealthPillCountLabel();
             lblHealthExposedCount = new Label { Visible = false };
 
+            healthPillBorders.Clear();
+            healthPillInsets.Clear();
+            healthPillBaseColors.Clear();
+
             var reusedPill = CreateHealthStatPill(
                 "⚠",
                 lblHealthReusedCount,
@@ -1942,7 +1950,7 @@ namespace PasswordManager
             };
         }
 
-        private static Panel CreateHealthStatPill(
+        private Panel CreateHealthStatPill(
             string icon,
             Label countLabel,
             string caption,
@@ -1951,6 +1959,7 @@ namespace PasswordManager
         {
             countLabel.ForeColor = accent;
             countLabel.BackColor = background;
+            countLabel.Cursor = Cursors.Hand;
 
             var iconLbl = new Label
             {
@@ -1961,11 +1970,26 @@ namespace PasswordManager
                 Font = AppTheme.Base,
                 ForeColor = accent,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                BackColor = background
+                BackColor = background,
+                Cursor = Cursors.Hand
             };
 
-            var topRow = new Panel { Dock = DockStyle.Top, Height = 22, BackColor = background };
+            var chevron = new Label
+            {
+                Text = "›",
+                Dock = DockStyle.Right,
+                Width = 16,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = background,
+                Cursor = Cursors.Hand
+            };
+
+            var topRow = new Panel { Dock = DockStyle.Top, Height = 22, BackColor = background, Cursor = Cursors.Hand };
+            // Dock order: fill count, then right chevron, then left icon.
             topRow.Controls.Add(countLabel);
+            topRow.Controls.Add(chevron);
             topRow.Controls.Add(iconLbl);
 
             var captionLbl = new Label
@@ -1975,30 +1999,139 @@ namespace PasswordManager
                 Font = AppTheme.Caption,
                 ForeColor = AppTheme.TextSecondary,
                 TextAlign = System.Drawing.ContentAlignment.TopLeft,
-                BackColor = background
-            };
-
-            var pill = new Panel
-            {
-                Size = new System.Drawing.Size(92, 70),
                 BackColor = background,
-                Padding = new Padding(10, 8, 10, 6),
                 Cursor = Cursors.Hand
             };
-            countLabel.Cursor = Cursors.Hand;
-            iconLbl.Cursor = Cursors.Hand;
-            topRow.Cursor = Cursors.Hand;
-            captionLbl.Cursor = Cursors.Hand;
-            pill.Controls.Add(captionLbl);
-            pill.Controls.Add(topRow);
-            return pill;
+
+            var inset = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = background,
+                Padding = new Padding(10, 8, 6, 6),
+                Cursor = Cursors.Hand
+            };
+            inset.Controls.Add(captionLbl);
+            inset.Controls.Add(topRow);
+
+            // Outer border makes the pill read as a button; colour updates for hover/selected.
+            var border = new Panel
+            {
+                Size = new System.Drawing.Size(100, 74),
+                BackColor = AppTheme.Border,
+                Padding = new Padding(1),
+                Cursor = Cursors.Hand
+            };
+            border.Controls.Add(inset);
+            border.Tag = background; // base fill for hover restore
+
+            // Stash chevron for selected-state accent colour updates.
+            chevron.Tag = "health-pill-chevron";
+
+            return border;
         }
 
-        /// Makes a Password Health pill open the same issue detail list as the old Security Issues rows.
-        private void WireHealthPill(Panel pill, PasswordHealth.IssueKind kind)
+        /// Makes a Password Health pill open the issue detail list and track selection styling.
+        private void WireHealthPill(Panel pillBorder, PasswordHealth.IssueKind kind)
         {
+            if (pillBorder.Controls.Count == 0 || pillBorder.Controls[0] is not Panel inset)
+            {
+                return;
+            }
+
+            healthPillBorders[kind] = pillBorder;
+            healthPillInsets[kind] = inset;
+            if (pillBorder.Tag is System.Drawing.Color baseColor)
+            {
+                healthPillBaseColors[kind] = baseColor;
+            }
+
             EventHandler open = (s, e) => ShowSecurityIssue(kind);
-            WireClickRecursive(pill, open);
+            WireClickRecursive(pillBorder, open);
+
+            // Hover: lighten toward AccentSubtle while keeping the issue tint readable.
+            EventHandler hoverOn = (s, e) =>
+            {
+                if (activeSecurityIssue == kind)
+                {
+                    return;
+                }
+
+                ApplyHealthPillVisual(kind, hovered: true, selected: false);
+            };
+            EventHandler hoverOff = (s, e) =>
+            {
+                var pos = pillBorder.PointToClient(Control.MousePosition);
+                if (pillBorder.ClientRectangle.Contains(pos))
+                {
+                    return;
+                }
+
+                ApplyHealthPillVisual(kind, hovered: false, selected: activeSecurityIssue == kind);
+            };
+
+            WireHoverRecursive(pillBorder, hoverOn, hoverOff);
+        }
+
+        private void ApplyHealthPillVisual(PasswordHealth.IssueKind kind, bool hovered, bool selected)
+        {
+            if (!healthPillBorders.TryGetValue(kind, out var border)
+                || !healthPillInsets.TryGetValue(kind, out var inset)
+                || !healthPillBaseColors.TryGetValue(kind, out var baseColor))
+            {
+                return;
+            }
+
+            System.Drawing.Color fill;
+            System.Drawing.Color edge;
+            if (selected)
+            {
+                fill = AppTheme.AccentSubtle;
+                edge = AppTheme.Accent;
+                border.Padding = new Padding(3, 1, 1, 1);
+            }
+            else if (hovered)
+            {
+                fill = BlendColors(baseColor, AppTheme.AccentSubtle, 0.45f);
+                edge = AppTheme.Accent;
+                border.Padding = new Padding(1);
+            }
+            else
+            {
+                fill = baseColor;
+                edge = AppTheme.Border;
+                border.Padding = new Padding(1);
+            }
+
+            border.BackColor = edge;
+            ApplyHealthPillFill(inset, fill, selected);
+        }
+
+        private static System.Drawing.Color BlendColors(System.Drawing.Color a, System.Drawing.Color b, float amountB)
+        {
+            amountB = Math.Max(0f, Math.Min(1f, amountB));
+            float amountA = 1f - amountB;
+            return System.Drawing.Color.FromArgb(
+                (int)(a.R * amountA + b.R * amountB),
+                (int)(a.G * amountA + b.G * amountB),
+                (int)(a.B * amountA + b.B * amountB));
+        }
+
+        private static void ApplyHealthPillFill(Control root, System.Drawing.Color fill, bool selected)
+        {
+            root.BackColor = fill;
+            foreach (Control child in root.Controls)
+            {
+                if (child is Label lbl && Equals(lbl.Tag, "health-pill-chevron"))
+                {
+                    lbl.ForeColor = selected ? AppTheme.Accent : AppTheme.TextSecondary;
+                    lbl.BackColor = fill;
+                    continue;
+                }
+
+                // Keep icon/count accent ForeColor; only update background.
+                child.BackColor = fill;
+                ApplyHealthPillFill(child, fill, selected);
+            }
         }
 
         private void HealthRingPanel_Paint(object sender, PaintEventArgs e)
@@ -2693,9 +2826,14 @@ namespace PasswordManager
             UpdateSecurityIssueHighlights();
         }
 
-        /// Reserved for future selected-state styling; hover is handled by AttachAccentHover.
+        /// Updates Password Health pill selected styling to match the active issue on the right.
         private void UpdateSecurityIssueHighlights()
         {
+            foreach (var kind in healthPillBorders.Keys)
+            {
+                bool selected = activeSecurityIssue.HasValue && activeSecurityIssue.Value.Equals(kind);
+                ApplyHealthPillVisual(kind, hovered: false, selected: selected);
+            }
         }
 
         /// Purple hover tint (AccentSubtle), same approach as CreateSettingsActionRow / nav rows.
