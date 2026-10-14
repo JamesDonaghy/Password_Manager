@@ -62,6 +62,16 @@ namespace PasswordManager
         private CheckBox chkGeneratorLowercase;
         private CheckBox chkGeneratorDigits;
         private CheckBox chkGeneratorSymbols;
+        private Label lblPasswordStrength;
+        private Label lblPasswordMeta;
+        private Panel pnlPasswordStrengthFill;
+        private Label lblPassphraseStrength;
+        private Label lblPassphraseMeta;
+        private Panel pnlPassphraseStrengthFill;
+        private Label lblUsernameStrength;
+        private Label lblUsernameMeta;
+        private Panel pnlUsernameStrengthFill;
+        private Panel generatorRightFeaturesHost;
         private Panel generatorPasswordPanel;
         private Panel generatorPassphrasePanel;
         private Panel generatorUsernamePanel;
@@ -1085,29 +1095,49 @@ namespace PasswordManager
             generatorMiddle.Controls.Add(tabBottomLine);
             generatorMiddle.Controls.Add(tabStrip);
 
+            var rightIcon = new Label
+            {
+                Text = "🛡",
+                Dock = DockStyle.Top,
+                Height = 48,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 22f),
+                ForeColor = AppTheme.Accent,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.PanelBackground
+            };
             lblGeneratorRightHeading = new Label
             {
                 Text = "Password Generator",
                 Dock = DockStyle.Top,
-                Height = 32,
-                Font = AppTheme.Heading,
+                Height = 28,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f, System.Drawing.FontStyle.Bold),
                 ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.PanelBackground
             };
             lblGeneratorRightHint = new Label
             {
-                Text = "Adjust length and character types, then copy the password into a vault entry.",
+                Text = "Create strong, unique passwords to keep your accounts secure.",
                 Dock = DockStyle.Top,
-                Height = 120,
+                Height = 56,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextSecondary,
-                TextAlign = System.Drawing.ContentAlignment.TopCenter
+                TextAlign = System.Drawing.ContentAlignment.TopCenter,
+                BackColor = AppTheme.PanelBackground
             };
+            var rightDivider = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = AppTheme.Border };
+            generatorRightFeaturesHost = new Panel { Dock = DockStyle.Top, Height = 220, BackColor = AppTheme.PanelBackground };
 
-            generatorRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 20, 16, 20) };
+            generatorRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(20, 24, 20, 20) };
+            generatorRight.Controls.Add(generatorRightFeaturesHost);
+            generatorRight.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.PanelBackground });
+            generatorRight.Controls.Add(rightDivider);
+            generatorRight.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.PanelBackground });
             generatorRight.Controls.Add(lblGeneratorRightHint);
             generatorRight.Controls.Add(lblGeneratorRightHeading);
+            generatorRight.Controls.Add(rightIcon);
 
+            ShowGeneratorTab(0);
             RegeneratePasswordFromOptions();
             RegeneratePassphraseFromOptions();
             RegenerateUsernameFromOptions();
@@ -1115,242 +1145,109 @@ namespace PasswordManager
 
         private Panel BuildPasswordGeneratorContent()
         {
-            var lblHeading = new Label
-            {
-                Text = "Password Generator",
-                Dock = DockStyle.Top,
-                Height = 32,
-                Font = AppTheme.Heading,
-                ForeColor = AppTheme.TextPrimary
-            };
-            var lblSubtitle = new Label
-            {
-                Text = "Create strong, unique passwords",
-                Dock = DockStyle.Top,
-                Height = 22,
-                Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary
-            };
-            var spacer = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background };
+            var title = GenTitle("Password Generator");
+            var subtitle = GenSubtitle("Create strong, unique passwords for your accounts.");
 
-            txtGeneratedPassword = new TextBox
-            {
-                Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.None,
-                BackColor = AppTheme.Surface,
-                ForeColor = AppTheme.TextPrimary,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 11f),
-                ReadOnly = true
-            };
+            txtGeneratedPassword = GenResultBox();
+            var btnCopy = GenSquareBtn("📋", "Copy");
+            btnCopy.Click += (s, e) => { if (!string.IsNullOrEmpty(txtGeneratedPassword.Text)) clipboardGuard.CopyAndAutoClear(txtGeneratedPassword.Text); };
+            var btnRegen = GenSquareBtn("↻", "Regenerate");
+            btnRegen.Click += (s, e) => RegeneratePasswordFromOptions();
 
-            var btnCopyGenerated = DialogControls.CreateInlineActionButton("Copy", 56, 26);
-            btnCopyGenerated.Click += (s, e) =>
-            {
-                if (!string.IsNullOrEmpty(txtGeneratedPassword.Text))
-                {
-                    clipboardGuard.CopyAndAutoClear(txtGeneratedPassword.Text);
-                }
-            };
+            lblPasswordStrength = new Label();
+            lblPasswordMeta = new Label();
+            pnlPasswordStrengthFill = new Panel();
+            var strength = GenStrengthRow(lblPasswordStrength, lblPasswordMeta, pnlPasswordStrengthFill, "Strong password", "20 characters");
+            var resultCard = GenResultCard("GENERATED PASSWORD", txtGeneratedPassword, btnCopy, btnRegen, strength);
 
-            var passwordRow = DialogControls.CreateBorderedFieldRow(txtGeneratedPassword, btnCopyGenerated);
-            passwordRow.Dock = DockStyle.Top;
-            passwordRow.Height = 40;
+            nudGeneratorLength = new NumericUpDown { Minimum = PasswordGenerator.MinLength, Maximum = PasswordGenerator.MaxLength, Value = PasswordGenerator.DefaultLength, Visible = false };
+            var lengthValue = new Label { Text = "20", Size = new System.Drawing.Size(40, 28), TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Font = AppTheme.Base, BackColor = AppTheme.Surface };
+            var btnMinus = GenStepBtn("−");
+            var btnPlus = GenStepBtn("+");
+            btnMinus.Click += (s, e) => { if (nudGeneratorLength.Value > nudGeneratorLength.Minimum) nudGeneratorLength.Value -= 1; };
+            btnPlus.Click += (s, e) => { if (nudGeneratorLength.Value < nudGeneratorLength.Maximum) nudGeneratorLength.Value += 1; };
+            nudGeneratorLength.ValueChanged += (s, e) => { lengthValue.Text = ((int)nudGeneratorLength.Value).ToString(); RegeneratePasswordFromOptions(); };
 
-            var lblLength = new Label
-            {
-                Text = "Length",
-                Dock = DockStyle.Left,
-                Width = 60,
-                Font = AppTheme.Base,
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
-            };
-            nudGeneratorLength = new NumericUpDown
-            {
-                Minimum = PasswordGenerator.MinLength,
-                Maximum = PasswordGenerator.MaxLength,
-                Value = PasswordGenerator.DefaultLength,
-                Width = 72,
-                Font = AppTheme.Base,
-                Dock = DockStyle.Left
-            };
-            nudGeneratorLength.ValueChanged += (s, e) => RegeneratePasswordFromOptions();
+            var stepper = new FlowLayoutPanel { AutoSize = true, WrapContents = false, BackColor = AppTheme.Surface, Dock = DockStyle.Left };
+            stepper.Controls.Add(btnMinus); stepper.Controls.Add(lengthValue); stepper.Controls.Add(btnPlus);
+            var lengthRow = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = AppTheme.Surface, Padding = new Padding(16, 4, 16, 4) };
+            // Label then stepper on the left so length controls stay visible next to the label.
+            lengthRow.Controls.Add(stepper);
+            lengthRow.Controls.Add(new Label { Text = "Length", Dock = DockStyle.Left, Width = 56, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Font = AppTheme.Base, BackColor = AppTheme.Surface });
 
-            var lengthRow = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = AppTheme.Background };
-            lengthRow.Controls.Add(nudGeneratorLength);
-            lengthRow.Controls.Add(lblLength);
-
-            chkGeneratorUppercase = CreateGeneratorOptionCheckBox("Uppercase (A–Z)", true);
-            chkGeneratorLowercase = CreateGeneratorOptionCheckBox("Lowercase (a–z)", true);
+            chkGeneratorUppercase = CreateGeneratorOptionCheckBox("Uppercase letters (A–Z)", true);
+            chkGeneratorLowercase = CreateGeneratorOptionCheckBox("Lowercase letters (a–z)", true);
             chkGeneratorDigits = CreateGeneratorOptionCheckBox("Numbers (0–9)", true);
             chkGeneratorSymbols = CreateGeneratorOptionCheckBox("Symbols (!@#$…)", true);
-
-            var optionsStack = new Panel { Dock = DockStyle.Top, Height = 32 * 4, BackColor = AppTheme.Background };
-            optionsStack.Controls.Add(chkGeneratorSymbols);
-            optionsStack.Controls.Add(chkGeneratorDigits);
-            optionsStack.Controls.Add(chkGeneratorLowercase);
-            optionsStack.Controls.Add(chkGeneratorUppercase);
-
-            var lblOptions = new Label
+            foreach (var c in new[] { chkGeneratorUppercase, chkGeneratorLowercase, chkGeneratorDigits, chkGeneratorSymbols })
             {
-                Text = "Include",
-                Dock = DockStyle.Top,
-                Height = 24,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f, System.Drawing.FontStyle.Bold),
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.BottomLeft
-            };
+                c.Dock = DockStyle.Top; c.Height = 30; c.BackColor = AppTheme.Surface; c.Padding = new Padding(16, 0, 0, 0); c.Cursor = Cursors.Hand;
+            }
 
-            var btnGenerate = DialogControls.CreatePrimaryButton("Generate", 120, 36);
-            btnGenerate.Dock = DockStyle.Left;
-            btnGenerate.Click += (s, e) => RegeneratePasswordFromOptions();
+            var optionsBody = new Panel { Dock = DockStyle.Top, Height = 36 + 30 * 4, BackColor = AppTheme.Surface };
+            optionsBody.Controls.Add(chkGeneratorSymbols);
+            optionsBody.Controls.Add(chkGeneratorDigits);
+            optionsBody.Controls.Add(chkGeneratorLowercase);
+            optionsBody.Controls.Add(chkGeneratorUppercase);
+            optionsBody.Controls.Add(lengthRow);
+            var optionsCard = GenOptionsCard("Password options", optionsBody, 36 + 30 * 4 + 40);
 
-            var buttonRow = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 44,
-                BackColor = AppTheme.Background,
-                Padding = new Padding(0, 8, 0, 0)
-            };
-            buttonRow.Controls.Add(btnGenerate);
-
-            var panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background };
-            panel.Controls.Add(buttonRow);
-            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Background });
-            panel.Controls.Add(optionsStack);
-            panel.Controls.Add(lblOptions);
-            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
-            panel.Controls.Add(lengthRow);
-            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
-            panel.Controls.Add(passwordRow);
-            panel.Controls.Add(spacer);
-            panel.Controls.Add(lblSubtitle);
-            panel.Controls.Add(lblHeading);
-            return panel;
+            return GenPage(title, subtitle, resultCard, optionsCard);
         }
 
         private Panel BuildPassphraseGeneratorContent()
         {
-            var lblHeading = new Label
-            {
-                Text = "Passphrase Generator",
-                Dock = DockStyle.Top,
-                Height = 32,
-                Font = AppTheme.Heading,
-                ForeColor = AppTheme.TextPrimary
-            };
-            var lblSubtitle = new Label
-            {
-                Text = "Create memorable and secure passphrases using a mix of random words.",
-                Dock = DockStyle.Top,
-                Height = 36,
-                Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary
-            };
+            var title = GenTitle("Passphrase Generator");
+            var subtitle = GenSubtitle("Create memorable and secure passphrases using a mix of random words.");
 
-            var lblWords = new Label
-            {
-                Text = "Words",
-                Dock = DockStyle.Left,
-                Width = 56,
-                Font = AppTheme.Base,
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
-            };
-            nudPassphraseWords = new NumericUpDown
-            {
-                Minimum = PassphraseGenerator.MinWordCount,
-                Maximum = PassphraseGenerator.MaxWordCount,
-                Value = PassphraseGenerator.DefaultWordCount,
-                Width = 64,
-                Font = AppTheme.Base,
-                Dock = DockStyle.Left
-            };
-            nudPassphraseWords.ValueChanged += (s, e) => RegeneratePassphraseFromOptions();
-            var lblWordsHint = new Label
-            {
-                Text = "Recommended: 4–6 words",
-                Dock = DockStyle.Left,
-                Width = 160,
-                Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                Padding = new Padding(12, 0, 0, 0)
-            };
-            var wordsRow = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = AppTheme.Background };
-            wordsRow.Controls.Add(lblWordsHint);
-            wordsRow.Controls.Add(nudPassphraseWords);
-            wordsRow.Controls.Add(lblWords);
+            txtGeneratedPassphrase = GenResultBox();
+            var btnCopy = GenSquareBtn("📋", "Copy");
+            btnCopy.Click += (s, e) => { if (!string.IsNullOrEmpty(txtGeneratedPassphrase.Text)) clipboardGuard.CopyAndAutoClear(txtGeneratedPassphrase.Text); };
+            var btnRegen = GenSquareBtn("↻", "Regenerate");
+            btnRegen.Click += (s, e) => RegeneratePassphraseFromOptions();
 
-            var lblOptions = new Label
-            {
-                Text = "Options",
-                Dock = DockStyle.Top,
-                Height = 24,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f, System.Drawing.FontStyle.Bold),
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.BottomLeft
-            };
+            lblPassphraseStrength = new Label();
+            lblPassphraseMeta = new Label();
+            pnlPassphraseStrengthFill = new Panel();
+            var strength = GenStrengthRow(lblPassphraseStrength, lblPassphraseMeta, pnlPassphraseStrengthFill, "Strong passphrase", "5 words");
+            var resultCard = GenResultCard("GENERATED PASSPHRASE", txtGeneratedPassphrase, btnCopy, btnRegen, strength);
 
+            nudPassphraseWords = new NumericUpDown { Minimum = PassphraseGenerator.MinWordCount, Maximum = PassphraseGenerator.MaxWordCount, Value = PassphraseGenerator.DefaultWordCount, Visible = false };
+            var wordsValue = new Label { Text = ((int)nudPassphraseWords.Value).ToString(), Size = new System.Drawing.Size(36, 28), TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Font = AppTheme.Base, BackColor = AppTheme.Surface };
+            var btnMinus = GenStepBtn("−");
+            var btnPlus = GenStepBtn("+");
+            btnMinus.Click += (s, e) => { if (nudPassphraseWords.Value > nudPassphraseWords.Minimum) nudPassphraseWords.Value -= 1; };
+            btnPlus.Click += (s, e) => { if (nudPassphraseWords.Value < nudPassphraseWords.Maximum) nudPassphraseWords.Value += 1; };
+            nudPassphraseWords.ValueChanged += (s, e) => { wordsValue.Text = ((int)nudPassphraseWords.Value).ToString(); RegeneratePassphraseFromOptions(); };
+
+            var stepper = new FlowLayoutPanel { AutoSize = true, WrapContents = false, BackColor = AppTheme.Surface, Dock = DockStyle.Left };
+            stepper.Controls.Add(btnMinus); stepper.Controls.Add(wordsValue); stepper.Controls.Add(btnPlus);
+            var wordsRow = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = AppTheme.Surface, Padding = new Padding(16, 6, 16, 6) };
+            wordsRow.Controls.Add(stepper);
+            wordsRow.Controls.Add(new Label { Text = "Words", Dock = DockStyle.Left, Width = 60, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Font = AppTheme.Base, BackColor = AppTheme.Surface });
+
+            var lblOptions = new Label { Text = "Options", Dock = DockStyle.Top, Height = 28, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f, System.Drawing.FontStyle.Bold), ForeColor = AppTheme.TextPrimary, BackColor = AppTheme.Surface, Padding = new Padding(16, 8, 0, 0) };
             chkPassphraseCapitalize = CreatePassphraseOptionCheckBox("Capitalize each word", true);
             chkPassphraseNumbers = CreatePassphraseOptionCheckBox("Include numbers", true);
             chkPassphraseSpecial = CreatePassphraseOptionCheckBox("Include special characters", true);
-
-            var optionsStack = new Panel { Dock = DockStyle.Top, Height = 32 * 3, BackColor = AppTheme.Background };
-            optionsStack.Controls.Add(chkPassphraseSpecial);
-            optionsStack.Controls.Add(chkPassphraseNumbers);
-            optionsStack.Controls.Add(chkPassphraseCapitalize);
-
-            var btnGenerate = DialogControls.CreatePrimaryButton("Generate Passphrase", 160, 36);
-            btnGenerate.Dock = DockStyle.Left;
-            btnGenerate.Click += (s, e) => RegeneratePassphraseFromOptions();
-            var buttonRow = new Panel
+            foreach (var c in new[] { chkPassphraseCapitalize, chkPassphraseNumbers, chkPassphraseSpecial })
             {
-                Dock = DockStyle.Top,
-                Height = 44,
-                BackColor = AppTheme.Background,
-                Padding = new Padding(0, 8, 0, 0)
-            };
-            buttonRow.Controls.Add(btnGenerate);
+                c.Dock = DockStyle.Top; c.Height = 34; c.BackColor = AppTheme.Surface; c.Padding = new Padding(16, 0, 0, 0); c.Cursor = Cursors.Hand;
+            }
+            var optStack = new Panel { Dock = DockStyle.Top, Height = 34 * 3, BackColor = AppTheme.Surface };
+            optStack.Controls.Add(chkPassphraseSpecial);
+            optStack.Controls.Add(chkPassphraseNumbers);
+            optStack.Controls.Add(chkPassphraseCapitalize);
 
-            txtGeneratedPassphrase = new TextBox
-            {
-                Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.None,
-                BackColor = AppTheme.Surface,
-                ForeColor = AppTheme.TextPrimary,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 11f),
-                ReadOnly = true
-            };
-            var btnCopy = DialogControls.CreateInlineActionButton("Copy", 56, 26);
-            btnCopy.Click += (s, e) =>
-            {
-                if (!string.IsNullOrEmpty(txtGeneratedPassphrase.Text))
-                {
-                    clipboardGuard.CopyAndAutoClear(txtGeneratedPassphrase.Text);
-                }
-            };
-            var passphraseRow = DialogControls.CreateBorderedFieldRow(txtGeneratedPassphrase, btnCopy);
-            passphraseRow.Dock = DockStyle.Top;
-            passphraseRow.Height = 40;
+            var optionsBody = new Panel { Dock = DockStyle.Top, Height = 40 + 28 + 34 * 3, BackColor = AppTheme.Surface };
+            optionsBody.Controls.Add(optStack);
+            optionsBody.Controls.Add(lblOptions);
+            optionsBody.Controls.Add(wordsRow);
+            var optionsCard = GenOptionsCard("Passphrase options", optionsBody, 40 + 28 + 34 * 3 + 44);
 
-            var panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background };
-            // Dock=Top reverse order — visual top: heading, subtitle, output, words, options, generate
-            panel.Controls.Add(buttonRow);
-            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Background });
-            panel.Controls.Add(optionsStack);
-            panel.Controls.Add(lblOptions);
-            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
-            panel.Controls.Add(wordsRow);
-            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
-            panel.Controls.Add(passphraseRow);
-            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
-            panel.Controls.Add(lblSubtitle);
-            panel.Controls.Add(lblHeading);
-            return panel;
+            return GenPage(title, subtitle, resultCard, optionsCard);
         }
 
-        /// <param name="tabIndex">0 = Password, 1 = Passphrase, 2 = Username</param>
         private void ShowGeneratorTab(int tabIndex)
         {
             if (generatorPasswordPanel == null || generatorPassphrasePanel == null || generatorUsernamePanel == null)
@@ -1368,167 +1265,331 @@ namespace PasswordManager
             btnTabPassphrase.ForeColor = tabIndex == 1 ? AppTheme.Accent : AppTheme.TextSecondary;
             btnTabUsername.ForeColor = tabIndex == 2 ? AppTheme.Accent : AppTheme.TextSecondary;
 
-            if (lblGeneratorRightHeading != null)
+            if (lblGeneratorRightHeading == null)
             {
-                switch (tabIndex)
-                {
-                    case 1:
-                        lblGeneratorRightHeading.Text = "Passphrase Generator";
-                        lblGeneratorRightHint.Text =
-                            "Passphrases are longer, easier to remember, and more secure than traditional passwords. Ideal when you want strong security without a complex random string.";
-                        break;
-                    case 2:
-                        lblGeneratorRightHeading.Text = "Username Generator";
-                        lblGeneratorRightHint.Text =
-                            "Generate unique, memorable usernames that are easy to remember and hard for others to guess. Perfect for websites, apps and online services.\n\n" +
-                            "• Creates readable, memorable usernames\n" +
-                            "• Helps avoid username reuse\n" +
-                            "• Customisable style and length\n" +
-                            "• Works well across different websites";
-                        break;
-                    default:
-                        lblGeneratorRightHeading.Text = "Password Generator";
-                        lblGeneratorRightHint.Text = "Adjust length and character types, then copy the password into a vault entry.";
-                        break;
-                }
+                return;
             }
+
+            switch (tabIndex)
+            {
+                case 1:
+                    lblGeneratorRightHeading.Text = "Passphrase Generator";
+                    lblGeneratorRightHint.Text = "Passphrases are longer, easier to remember, and more secure than traditional passwords. Ideal when you want strong security without a complex random string.";
+                    PopulateGeneratorRightFeatures(
+                        ("🔒", "More secure", "Longer phrases are harder to crack than short passwords."),
+                        ("🧠", "Easy to remember", "Made from real words, so they're simple to recall."),
+                        ("⚙", "Customisable", "Choose the number of words and character options you want."));
+                    break;
+                case 2:
+                    lblGeneratorRightHeading.Text = "Username Generator";
+                    lblGeneratorRightHint.Text = "Generate unique, secure usernames that are easy to remember and hard for others to guess. Perfect for websites, apps and online services.";
+                    PopulateGeneratorRightFeatures(
+                        ("🔒", "Unique & secure", "Helps you avoid reused usernames and reduces the risk of account takeovers."),
+                        ("✨", "Customisable", "Choose the length, separator, capitalisation and numbers."),
+                        ("↻", "Save time", "Get reliable usernames in seconds with just a few clicks."));
+                    break;
+                default:
+                    lblGeneratorRightHeading.Text = "Password Generator";
+                    lblGeneratorRightHint.Text = "Create strong, unique passwords to keep your accounts secure.";
+                    PopulateGeneratorRightFeatures(
+                        ("🔒", "Strong and unique", "Generate passwords that are hard to guess and different for each account."),
+                        ("⚙", "Customisable", "Choose the length and character types to suit your needs."),
+                        ("📋", "Instantly copy", "Copy to your clipboard with one click."));
+                    break;
+            }
+        }
+
+        private void PopulateGeneratorRightFeatures(params (string icon, string title, string body)[] features)
+        {
+            if (generatorRightFeaturesHost == null) return;
+            generatorRightFeaturesHost.Controls.Clear();
+            for (int i = features.Length - 1; i >= 0; i--)
+            {
+                var (icon, title, body) = features[i];
+                generatorRightFeaturesHost.Controls.Add(CreateGeneratorFeatureRow(icon, title, body));
+                if (i > 0)
+                    generatorRightFeaturesHost.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.PanelBackground });
+            }
+        }
+
+        private static Panel CreateGeneratorFeatureRow(string icon, string title, string body)
+        {
+            var iconLbl = new Label
+            {
+                Text = icon, Dock = DockStyle.Left, Width = 36, Height = 36,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
+                ForeColor = AppTheme.Accent, TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.AccentSubtle
+            };
+            var titleLbl = new Label { Text = title, Dock = DockStyle.Top, Height = 20, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold), ForeColor = AppTheme.TextPrimary, BackColor = AppTheme.PanelBackground };
+            var bodyLbl = new Label { Text = body, Dock = DockStyle.Top, Height = 40, Font = AppTheme.Base, ForeColor = AppTheme.TextSecondary, BackColor = AppTheme.PanelBackground };
+            var textCol = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(10, 0, 0, 0) };
+            textCol.Controls.Add(bodyLbl);
+            textCol.Controls.Add(titleLbl);
+            var row = new Panel { Dock = DockStyle.Top, Height = 56, BackColor = AppTheme.PanelBackground };
+            row.Controls.Add(textCol);
+            row.Controls.Add(iconLbl);
+            return row;
         }
 
         private Panel BuildUsernameGeneratorContent()
         {
-            var lblHeading = new Label
-            {
-                Text = "Username Generator",
-                Dock = DockStyle.Top,
-                Height = 32,
-                Font = AppTheme.Heading,
-                ForeColor = AppTheme.TextPrimary
-            };
-            var lblSubtitle = new Label
-            {
-                Text = "Create unique, memorable usernames for your accounts.",
-                Dock = DockStyle.Top,
-                Height = 28,
-                Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary
-            };
+            var title = GenTitle("Username Generator");
+            var subtitle = GenSubtitle("Create unique, memorable usernames for your accounts.");
 
-            txtGeneratedUsername = new TextBox
-            {
-                Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.None,
-                BackColor = AppTheme.Surface,
-                ForeColor = AppTheme.TextPrimary,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 11f),
-                ReadOnly = true
-            };
-            var btnCopy = DialogControls.CreateInlineActionButton("Copy", 56, 26);
-            btnCopy.Click += (s, e) =>
-            {
-                if (!string.IsNullOrEmpty(txtGeneratedUsername.Text))
-                {
-                    clipboardGuard.CopyAndAutoClear(txtGeneratedUsername.Text);
-                }
-            };
-            var resultRow = DialogControls.CreateBorderedFieldRow(txtGeneratedUsername, btnCopy);
-            resultRow.Dock = DockStyle.Top;
-            resultRow.Height = 40;
+            txtGeneratedUsername = GenResultBox();
+            var btnCopy = GenSquareBtn("📋", "Copy");
+            btnCopy.Click += (s, e) => { if (!string.IsNullOrEmpty(txtGeneratedUsername.Text)) clipboardGuard.CopyAndAutoClear(txtGeneratedUsername.Text); };
+            var btnRegen = GenSquareBtn("↻", "Regenerate");
+            btnRegen.Click += (s, e) => RegenerateUsernameFromOptions();
 
-            // Words (count of word parts in the username)
-            nudUsernameWords = new NumericUpDown
-            {
-                Minimum = UsernameGenerator.MinWordCount,
-                Maximum = UsernameGenerator.MaxWordCount,
-                Value = UsernameGenerator.DefaultWordCount,
-                Width = 64,
-                Font = AppTheme.Base,
-                Dock = DockStyle.Left
-            };
-            var wordsRow = CreateUsernameLabeledRow("Words", nudUsernameWords);
+            var resultCard = GenResultCard("GENERATED USERNAME", txtGeneratedUsername, btnCopy, btnRegen, strengthRow: null);
 
-            // Separator (only relevant when more than one word is joined)
+            nudUsernameWords = new NumericUpDown { Minimum = UsernameGenerator.MinWordCount, Maximum = UsernameGenerator.MaxWordCount, Value = UsernameGenerator.DefaultWordCount, Visible = false };
+            var wordsValue = new Label { Text = ((int)nudUsernameWords.Value).ToString(), Size = new System.Drawing.Size(36, 28), TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Font = AppTheme.Base, BackColor = AppTheme.Surface };
+            var btnMinus = GenStepBtn("−");
+            var btnPlus = GenStepBtn("+");
+            btnMinus.Click += (s, e) => { if (nudUsernameWords.Value > nudUsernameWords.Minimum) nudUsernameWords.Value -= 1; };
+            btnPlus.Click += (s, e) => { if (nudUsernameWords.Value < nudUsernameWords.Maximum) nudUsernameWords.Value += 1; };
+
+            var wordsStepper = new FlowLayoutPanel { AutoSize = true, WrapContents = false, BackColor = AppTheme.Surface, Dock = DockStyle.Left };
+            wordsStepper.Controls.Add(btnMinus); wordsStepper.Controls.Add(wordsValue); wordsStepper.Controls.Add(btnPlus);
+
             cmbUsernameSeparator = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Width = 120,
+                Width = 88,
+                Height = 26,
                 Font = AppTheme.Base,
-                Dock = DockStyle.Left
+                FlatStyle = FlatStyle.Standard,
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.TextPrimary,
+                Dock = DockStyle.Fill
             };
             cmbUsernameSeparator.Items.AddRange(new object[] { ".", "_", "-", "None" });
             cmbUsernameSeparator.SelectedIndex = 0;
             cmbUsernameSeparator.SelectedIndexChanged += (s, e) => RegenerateUsernameFromOptions();
-            var separatorRow = CreateUsernameLabeledRow("Separator", cmbUsernameSeparator);
-
-            void SyncUsernameSeparatorVisibility()
+            var sepHost = new Panel
             {
-                separatorRow.Visible = nudUsernameWords.Value > 1;
-            }
-
-            nudUsernameWords.ValueChanged += (s, e) =>
-            {
-                SyncUsernameSeparatorVisibility();
-                RegenerateUsernameFromOptions();
+                Dock = DockStyle.Left,
+                Width = 92,
+                Height = 28,
+                BackColor = AppTheme.Border,
+                Padding = new Padding(1),
+                Margin = new Padding(0, 2, 0, 2)
             };
-            SyncUsernameSeparatorVisibility();
+            var sepInner = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            sepInner.Controls.Add(cmbUsernameSeparator);
+            sepHost.Controls.Add(sepInner);
 
-            // Capitalization
             cmbUsernameCapitalization = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Width = 140,
+                Width = 128,
+                Height = 26,
                 Font = AppTheme.Base,
-                Dock = DockStyle.Left
+                FlatStyle = FlatStyle.Standard,
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.TextPrimary,
+                Dock = DockStyle.Fill
             };
             cmbUsernameCapitalization.Items.AddRange(new object[] { "Lowercase", "Capitalized", "Mixed Case" });
             cmbUsernameCapitalization.SelectedIndex = 0;
             cmbUsernameCapitalization.SelectedIndexChanged += (s, e) => RegenerateUsernameFromOptions();
-            var capitalRow = CreateUsernameLabeledRow("Capitalization", cmbUsernameCapitalization);
+            var capHost = new Panel
+            {
+                Dock = DockStyle.Left,
+                Width = 132,
+                Height = 28,
+                BackColor = AppTheme.Border,
+                Padding = new Padding(1),
+                Margin = new Padding(0, 2, 0, 2)
+            };
+            var capInner = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            capInner.Controls.Add(cmbUsernameCapitalization);
+            capHost.Controls.Add(capInner);
 
-            chkUsernameNumbers = CreateGeneratorOptionCheckBox("Include Numbers", true);
-            // Reuse CreateGeneratorOptionCheckBox wires password regen — override for username.
-            chkUsernameNumbers.CheckedChanged -= GeneratorOption_CheckedChanged;
+            chkUsernameNumbers = new CheckBox { Text = "Include Numbers", AutoSize = true, Checked = true, Font = AppTheme.Base, ForeColor = AppTheme.TextPrimary, BackColor = AppTheme.Surface, Cursor = Cursors.Hand, Dock = DockStyle.Left, Padding = new Padding(16, 0, 0, 0) };
             chkUsernameNumbers.CheckedChanged += (s, e) => RegenerateUsernameFromOptions();
 
-            var optionsStack = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = AppTheme.Background };
-            optionsStack.Controls.Add(chkUsernameNumbers);
+            var lblSep = new Label { Text = "Separator", Dock = DockStyle.Left, Width = 70, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Font = AppTheme.Base, BackColor = AppTheme.Surface, Padding = new Padding(16, 0, 0, 0) };
+            var row1 = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = AppTheme.Surface, Padding = new Padding(16, 4, 16, 4) };
+            row1.Controls.Add(sepHost);
+            row1.Controls.Add(lblSep);
+            row1.Controls.Add(wordsStepper);
+            row1.Controls.Add(new Label { Text = "Words", Dock = DockStyle.Left, Width = 52, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Font = AppTheme.Base, BackColor = AppTheme.Surface });
 
-            var lblOptions = new Label
+            var row2 = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = AppTheme.Surface, Padding = new Padding(16, 4, 16, 4) };
+            row2.Controls.Add(chkUsernameNumbers);
+            row2.Controls.Add(capHost);
+            row2.Controls.Add(new Label { Text = "Capitalization", Dock = DockStyle.Left, Width = 100, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Font = AppTheme.Base, BackColor = AppTheme.Surface });
+
+            void SyncSep() { bool show = nudUsernameWords.Value > 1; lblSep.Visible = show; sepHost.Visible = show; }
+            nudUsernameWords.ValueChanged += (s, e) => { wordsValue.Text = ((int)nudUsernameWords.Value).ToString(); SyncSep(); RegenerateUsernameFromOptions(); };
+            SyncSep();
+
+            var optionsBody = new Panel { Dock = DockStyle.Top, Height = 80, BackColor = AppTheme.Surface };
+            optionsBody.Controls.Add(row2);
+            optionsBody.Controls.Add(row1);
+            var optionsCard = GenOptionsCard("Username options", optionsBody, 80 + 44);
+
+            return GenPage(title, subtitle, resultCard, optionsCard);
+        }
+
+        private static Label GenTitle(string text) => new Label { Text = text, Dock = DockStyle.Top, Height = 28, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12.5f, System.Drawing.FontStyle.Bold), ForeColor = AppTheme.TextPrimary, BackColor = AppTheme.Background };
+        private static Label GenSubtitle(string text) => new Label { Text = text, Dock = DockStyle.Top, Height = 24, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f), ForeColor = AppTheme.TextSecondary, BackColor = AppTheme.Background };
+        private static TextBox GenResultBox() => new TextBox { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, BackColor = AppTheme.AccentSubtle, ForeColor = AppTheme.TextPrimary, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10.5f, System.Drawing.FontStyle.Regular), ReadOnly = true };
+        private static Button GenSquareBtn(string icon, string caption)
+        {
+            // Single-line label so "Regenerate" is not clipped; slightly wider buttons.
+            var btn = new Button
             {
-                Text = "Options",
-                Dock = DockStyle.Top,
-                Height = 24,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f, System.Drawing.FontStyle.Bold),
+                Text = icon + "  " + caption,
+                Size = new System.Drawing.Size(110, 40),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = AppTheme.Surface,
                 ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.BottomLeft
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 8.5f),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(4, 0, 0, 0),
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
             };
+            btn.FlatAppearance.BorderSize = 1; btn.FlatAppearance.BorderColor = AppTheme.Border;
+            btn.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle; btn.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
+            return btn;
+        }
+        private static Button GenStepBtn(string text)
+        {
+            var btn = new Button { Text = text, Size = new System.Drawing.Size(26, 26), FlatStyle = FlatStyle.Flat, BackColor = AppTheme.PanelBackground, ForeColor = AppTheme.TextPrimary, Font = AppTheme.Base, Cursor = Cursors.Hand, Margin = new Padding(2, 0, 2, 0) };
+            btn.FlatAppearance.BorderSize = 0; btn.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
+            return btn;
+        }
 
-            var btnGenerate = DialogControls.CreatePrimaryButton("👤  Generate Username", 180, 36);
-            btnGenerate.Dock = DockStyle.Left;
-            btnGenerate.Click += (s, e) => RegenerateUsernameFromOptions();
-            var buttonRow = new Panel
+        /// Fallback track width when layout has not completed yet (first generate during build).
+        private const int GeneratorStrengthTrackWidthFallback = 200;
+
+        private Panel GenStrengthRow(Label strengthLabel, Label metaLabel, Panel fillPanel, string defaultStrength, string defaultMeta)
+        {
+            strengthLabel.Text = "✓  " + defaultStrength;
+            strengthLabel.Dock = DockStyle.Left;
+            strengthLabel.Width = 120;
+            strengthLabel.Font = AppTheme.Base;
+            strengthLabel.ForeColor = System.Drawing.Color.FromArgb(0x2F, 0x9E, 0x6B);
+            strengthLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            strengthLabel.BackColor = AppTheme.Surface;
+
+            metaLabel.Text = defaultMeta;
+            metaLabel.Dock = DockStyle.Right;
+            metaLabel.Width = 90;
+            metaLabel.Font = AppTheme.Base;
+            metaLabel.ForeColor = AppTheme.TextSecondary;
+            metaLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            metaLabel.BackColor = AppTheme.Surface;
+
+            fillPanel.Dock = DockStyle.None;
+            fillPanel.Location = new System.Drawing.Point(0, 0);
+            fillPanel.Height = 6;
+            fillPanel.Width = GeneratorStrengthTrackWidthFallback;
+            fillPanel.BackColor = System.Drawing.Color.FromArgb(0x34, 0xC7, 0x59);
+            fillPanel.Tag = 1.0; // last ratio 0..1
+
+            var trackInner = new Panel
             {
-                Dock = DockStyle.Top,
-                Height = 44,
-                BackColor = AppTheme.Background,
-                Padding = new Padding(0, 8, 0, 0)
+                Dock = DockStyle.Fill,
+                BackColor = AppTheme.PanelBackground,
+                Height = 6
             };
-            buttonRow.Controls.Add(btnGenerate);
+            trackInner.Controls.Add(fillPanel);
 
-            var panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background };
-            // Dock=Top reverse: visual top = heading … generate
-            panel.Controls.Add(buttonRow);
-            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Background });
-            panel.Controls.Add(optionsStack);
-            panel.Controls.Add(lblOptions);
-            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Background });
-            panel.Controls.Add(capitalRow);
-            panel.Controls.Add(separatorRow);
-            panel.Controls.Add(wordsRow);
+            // Fill remaining space between strength label and character-count meta.
+            var trackHost = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(8, 10, 8, 10)
+            };
+            trackHost.Controls.Add(trackInner);
+            trackHost.Resize += (s, e) =>
+            {
+                if (fillPanel.Tag is double r)
+                {
+                    ApplyStrengthFill(fillPanel, r, fillPanel.BackColor);
+                }
+            };
+
+            var row = new Panel { Dock = DockStyle.Top, Height = 28, BackColor = AppTheme.Surface, Padding = new Padding(0, 4, 0, 0) };
+            // Dock order: Fill track first, then Right meta, then Left label (WinForms dock reverse).
+            row.Controls.Add(trackHost);
+            row.Controls.Add(metaLabel);
+            row.Controls.Add(strengthLabel);
+            return row;
+        }
+
+        private static void ApplyStrengthFill(Panel fillPanel, double ratio, System.Drawing.Color color)
+        {
+            if (fillPanel == null)
+            {
+                return;
+            }
+
+            ratio = Math.Max(0.0, Math.Min(1.0, ratio));
+            fillPanel.Tag = ratio;
+            fillPanel.BackColor = color;
+
+            int trackWidth = fillPanel.Parent?.ClientSize.Width ?? 0;
+            if (trackWidth < 40)
+            {
+                trackWidth = GeneratorStrengthTrackWidthFallback;
+            }
+
+            fillPanel.Width = Math.Max(8, (int)Math.Round(trackWidth * ratio));
+            fillPanel.Height = 6;
+        }
+
+        private Panel GenResultCard(string caption, TextBox resultBox, Button copyBtn, Button regenBtn, Panel strengthRow)
+        {
+            var lbl = new Label { Text = caption, Dock = DockStyle.Top, Height = 22, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 8f, System.Drawing.FontStyle.Bold), ForeColor = AppTheme.TextSecondary, BackColor = AppTheme.Surface };
+            var fieldHost = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.AccentSubtle, Padding = new Padding(14, 12, 14, 12) };
+            resultBox.BackColor = AppTheme.AccentSubtle; fieldHost.Controls.Add(resultBox);
+            var actions = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 236, Height = 44, BackColor = AppTheme.Surface, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Padding = new Padding(6, 2, 4, 0) };
+            actions.Controls.Add(copyBtn); actions.Controls.Add(regenBtn);
+            var topRow = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = AppTheme.Surface };
+            topRow.Controls.Add(fieldHost); topRow.Controls.Add(actions);
+            var inner = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(16, 12, 16, 12) };
+            if (strengthRow != null)
+            {
+                inner.Controls.Add(strengthRow);
+                inner.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Surface });
+            }
+            inner.Controls.Add(topRow);
+            inner.Controls.Add(lbl);
+            int cardHeight = strengthRow != null ? 124 : 90;
+            var border = new Panel { Dock = DockStyle.Top, Height = cardHeight, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            var surface = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            surface.Controls.Add(inner); border.Controls.Add(surface);
+            return border;
+        }
+
+        private Panel GenOptionsCard(string title, Panel body, int height)
+        {
+            var lbl = new Label { Text = title, Dock = DockStyle.Top, Height = 32, Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold), ForeColor = AppTheme.TextPrimary, BackColor = AppTheme.Surface, Padding = new Padding(14, 8, 0, 0), TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+            body.Dock = DockStyle.Top; body.Height = Math.Max(40, height - 40);
+            var inner = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            inner.Controls.Add(body); inner.Controls.Add(lbl);
+            var border = new Panel { Dock = DockStyle.Top, Height = height, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            border.Controls.Add(inner);
+            return border;
+        }
+
+        private Panel GenPage(Label title, Label subtitle, Panel resultCard, Panel optionsCard)
+        {
+            var panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 8, 12) };
+            panel.Controls.Add(optionsCard);
+            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 14, BackColor = AppTheme.Background });
+            panel.Controls.Add(resultCard);
             panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
-            panel.Controls.Add(resultRow);
-            panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12, BackColor = AppTheme.Background });
-            panel.Controls.Add(lblSubtitle);
-            panel.Controls.Add(lblHeading);
+            panel.Controls.Add(subtitle);
+            panel.Controls.Add(title);
             return panel;
         }
 
@@ -1613,6 +1674,17 @@ namespace PasswordManager
                 IncludeSpecialCharacters = chkPassphraseSpecial?.Checked ?? true
             };
             txtGeneratedPassphrase.Text = PassphraseGenerator.Generate(options);
+            if (lblPassphraseStrength != null && lblPassphraseMeta != null && pnlPassphraseStrengthFill != null)
+            {
+                int words = options.WordCount;
+                bool strong = words >= 4;
+                lblPassphraseStrength.Text = strong ? "✓  Strong passphrase" : "✓  Fair passphrase";
+                lblPassphraseStrength.ForeColor = strong
+                    ? System.Drawing.Color.FromArgb(0x2F, 0x9E, 0x6B)
+                    : System.Drawing.Color.Goldenrod;
+                lblPassphraseMeta.Text = words + (words == 1 ? " word" : " words");
+                ApplyStrengthFill(pnlPassphraseStrengthFill, Math.Min(1.0, words / 6.0), lblPassphraseStrength.ForeColor);
+            }
         }
 
         private CheckBox CreateGeneratorOptionCheckBox(string text, bool isChecked)
@@ -1670,6 +1742,14 @@ namespace PasswordManager
             try
             {
                 txtGeneratedPassword.Text = PasswordGenerator.Generate(options);
+                if (lblPasswordStrength != null && lblPasswordMeta != null && pnlPasswordStrengthFill != null)
+                {
+                    var (score, label, color) = PasswordStrength.Evaluate(txtGeneratedPassword.Text);
+                    lblPasswordStrength.Text = "✓  " + label + " password";
+                    lblPasswordStrength.ForeColor = color;
+                    lblPasswordMeta.Text = options.Length + " characters";
+                    ApplyStrengthFill(pnlPasswordStrengthFill, score / 100.0, color);
+                }
             }
             catch (InvalidOperationException)
             {
@@ -2947,9 +3027,9 @@ namespace PasswordManager
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextSecondary
             };
-            var text = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground };
-            text.Controls.Add(user);
-            text.Controls.Add(name);
+            var textCol = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground };
+            textCol.Controls.Add(user);
+            textCol.Controls.Add(name);
 
             var chevron = new Label
             {
@@ -2962,7 +3042,7 @@ namespace PasswordManager
             };
 
             var row = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = AppTheme.PanelBackground, Padding = new Padding(0, 4, 0, 4), Cursor = Cursors.Hand };
-            row.Controls.Add(text);
+            row.Controls.Add(textCol);
             row.Controls.Add(chevron);
             row.Controls.Add(badgeHost);
 
