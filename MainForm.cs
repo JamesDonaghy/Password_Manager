@@ -43,7 +43,12 @@ namespace PasswordManager
         private Label lblIssueOldCount;
         private Label lblSecurityRightTitle;
         private Label lblSecurityRightHint;
+        private Label lblSecurityRightAffected;
+        private Label lblSecurityIssueSummaryIcon;
+        private Panel securityIssueSummaryBanner;
+        private Panel securityIssueTipHost;
         private Panel securityIssueEntriesHost;
+        private Label btnSecurityRightClose;
         private PasswordHealth.IssueKind? activeSecurityIssue;
         /// Inset panels for Security Issues rows — used to apply the purple selection highlight.
         private readonly Dictionary<PasswordHealth.IssueKind, Panel> securityIssueRowInsets = new Dictionary<PasswordHealth.IssueKind, Panel>();
@@ -1797,38 +1802,89 @@ namespace PasswordManager
             securityMiddle = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background, Padding = new Padding(16, 14, 16, 0) };
             securityMiddle.Controls.Add(securityContent);
 
-            // --- Right: issue detail / placeholder ---
+            // --- Right: issue detail panel (header, summary, list, tip) ---
             var backToOverview = new Label
             {
                 Text = "←",
                 Dock = DockStyle.Left,
                 Width = 28,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 14f),
                 ForeColor = AppTheme.TextPrimary,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                BackColor = AppTheme.PanelBackground
             };
             backToOverview.Click += (s, e) => ShowSecurityIssueOverview();
+
+            btnSecurityRightClose = new Label
+            {
+                Text = "✕",
+                Dock = DockStyle.Right,
+                Width = 28,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 11f),
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                Cursor = Cursors.Hand,
+                BackColor = AppTheme.PanelBackground,
+                Visible = false
+            };
+            btnSecurityRightClose.Click += (s, e) => ShowSecurityIssueOverview();
 
             lblSecurityRightTitle = new Label
             {
                 Text = "Password Health",
                 Dock = DockStyle.Fill,
-                Font = AppTheme.Heading,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f, System.Drawing.FontStyle.Bold),
                 ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                BackColor = AppTheme.PanelBackground
             };
             var rightTitleRow = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = AppTheme.PanelBackground };
             rightTitleRow.Controls.Add(lblSecurityRightTitle);
+            rightTitleRow.Controls.Add(btnSecurityRightClose);
             rightTitleRow.Controls.Add(backToOverview);
 
+            lblSecurityIssueSummaryIcon = new Label
+            {
+                Text = "⚠",
+                Dock = DockStyle.Left,
+                Width = 40,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 14f),
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = System.Drawing.Color.FromArgb(0xFE, 0xF3, 0xC7),
+                ForeColor = System.Drawing.Color.FromArgb(0xC4, 0x8A, 0x1A)
+            };
             lblSecurityRightHint = new Label
             {
                 Text = "Select a health category to see affected entries.",
-                Dock = DockStyle.Top,
-                Height = 40,
+                Dock = DockStyle.Fill,
                 Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary
+                ForeColor = AppTheme.TextSecondary,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Padding = new Padding(12, 0, 8, 0),
+                BackColor = AppTheme.PanelBackground
+            };
+            securityIssueSummaryBanner = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 56,
+                BackColor = AppTheme.PanelBackground,
+                Padding = new Padding(10, 8, 10, 8),
+                Visible = false
+            };
+            securityIssueSummaryBanner.Controls.Add(lblSecurityRightHint);
+            securityIssueSummaryBanner.Controls.Add(lblSecurityIssueSummaryIcon);
+
+            lblSecurityRightAffected = new Label
+            {
+                Text = "Affected Entries",
+                Dock = DockStyle.Top,
+                Height = 28,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft,
+                BackColor = AppTheme.PanelBackground,
+                Visible = false
             };
 
             securityIssueEntriesHost = new Panel
@@ -1836,13 +1892,62 @@ namespace PasswordManager
                 Dock = DockStyle.Fill,
                 AutoScroll = true,
                 BackColor = AppTheme.PanelBackground,
-                Padding = new Padding(0, 8, 0, 0)
+                Padding = new Padding(0, 4, 0, 8)
             };
 
-            securityRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 20, 16, 20) };
+            securityIssueTipHost = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 72,
+                BackColor = AppTheme.AccentSubtle,
+                Padding = new Padding(12, 10, 12, 10),
+                Visible = false
+            };
+            var tipIcon = new Label
+            {
+                Text = "ℹ",
+                Dock = DockStyle.Left,
+                Width = 24,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.Accent,
+                TextAlign = System.Drawing.ContentAlignment.TopCenter,
+                BackColor = AppTheme.AccentSubtle
+            };
+            var tipText = new Label
+            {
+                Text = "Consider updating these passwords to something stronger and unique for each account.",
+                Dock = DockStyle.Fill,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.AccentSubtle
+            };
+            tipText.Tag = "security-tip-text";
+            securityIssueTipHost.Controls.Add(tipText);
+            securityIssueTipHost.Controls.Add(tipIcon);
+
+            // Overview placeholder when no issue is selected
+            var overviewHint = new Label
+            {
+                Text = "Select a health category to see affected entries.",
+                Dock = DockStyle.Top,
+                Height = 40,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                BackColor = AppTheme.PanelBackground
+            };
+            overviewHint.Name = "securityOverviewHint";
+
+            securityRight = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground, Padding = new Padding(16, 16, 16, 16) };
             securityRight.Controls.Add(securityIssueEntriesHost);
-            securityRight.Controls.Add(lblSecurityRightHint);
+            securityRight.Controls.Add(securityIssueTipHost);
+            securityRight.Controls.Add(lblSecurityRightAffected);
+            securityRight.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 10, BackColor = AppTheme.PanelBackground, Name = "securityBannerSpacer" });
+            securityRight.Controls.Add(securityIssueSummaryBanner);
+            securityRight.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.PanelBackground });
             securityRight.Controls.Add(rightTitleRow);
+
+            // Keep overview hint in the entries host when empty
+            lblSecurityRightHint.Text = "Select a health category to see affected entries.";
         }
 
         private Panel BuildPasswordHealthCard()
@@ -2875,7 +2980,28 @@ namespace PasswordManager
             if (lblSecurityRightTitle != null)
             {
                 lblSecurityRightTitle.Text = "Password Health";
-                lblSecurityRightHint.Text = "Select a category above to see affected entries.";
+            }
+            if (lblSecurityRightHint != null)
+            {
+                lblSecurityRightHint.Text = "Select a health category to see affected entries.";
+                lblSecurityRightHint.BackColor = AppTheme.PanelBackground;
+                lblSecurityRightHint.ForeColor = AppTheme.TextSecondary;
+            }
+            if (securityIssueSummaryBanner != null)
+            {
+                securityIssueSummaryBanner.Visible = false;
+            }
+            if (lblSecurityRightAffected != null)
+            {
+                lblSecurityRightAffected.Visible = false;
+            }
+            if (securityIssueTipHost != null)
+            {
+                securityIssueTipHost.Visible = false;
+            }
+            if (btnSecurityRightClose != null)
+            {
+                btnSecurityRightClose.Visible = false;
             }
 
             securityIssueEntriesHost?.Controls.Clear();
@@ -2896,8 +3022,65 @@ namespace PasswordManager
             lblSecurityRightTitle.Text = PasswordHealth.TitleFor(kind);
             lblSecurityRightHint.Text = PasswordHealth.DescriptionFor(kind, entries.Count);
 
+            System.Drawing.Color bannerBg;
+            System.Drawing.Color iconFg;
+            string icon;
+            string tip;
+            switch (kind)
+            {
+                case PasswordHealth.IssueKind.Reused:
+                    bannerBg = System.Drawing.Color.FromArgb(0xFD, 0xEB, 0xEB);
+                    iconFg = System.Drawing.Color.FromArgb(0xC0, 0x3A, 0x3A);
+                    icon = "⚠";
+                    tip = "Consider updating these passwords to something stronger and unique for each account.";
+                    break;
+                case PasswordHealth.IssueKind.Old:
+                    bannerBg = System.Drawing.Color.FromArgb(0xF3, 0xF4, 0xF6);
+                    iconFg = AppTheme.TextSecondary;
+                    icon = "ℹ";
+                    tip = "Update older passwords regularly to reduce the risk of credential stuffing.";
+                    break;
+                default:
+                    bannerBg = System.Drawing.Color.FromArgb(0xFE, 0xF3, 0xC7);
+                    iconFg = System.Drawing.Color.FromArgb(0xC4, 0x8A, 0x1A);
+                    icon = "⚠";
+                    tip = "Consider updating these passwords to something stronger and unique for each account.";
+                    break;
+            }
+
+            if (lblSecurityIssueSummaryIcon != null)
+            {
+                lblSecurityIssueSummaryIcon.Text = icon;
+                lblSecurityIssueSummaryIcon.ForeColor = iconFg;
+                lblSecurityIssueSummaryIcon.BackColor = bannerBg;
+            }
+            lblSecurityRightHint.BackColor = bannerBg;
+            lblSecurityRightHint.ForeColor = AppTheme.TextPrimary;
+            securityIssueSummaryBanner.BackColor = bannerBg;
+            securityIssueSummaryBanner.Visible = true;
+
+            if (lblSecurityRightAffected != null)
+            {
+                lblSecurityRightAffected.Text = $"Affected Entries ({entries.Count})";
+                lblSecurityRightAffected.Visible = true;
+            }
+            if (btnSecurityRightClose != null)
+            {
+                btnSecurityRightClose.Visible = true;
+            }
+            if (securityIssueTipHost != null)
+            {
+                securityIssueTipHost.Visible = true;
+                foreach (Control c in securityIssueTipHost.Controls)
+                {
+                    if (c is Label tipLbl && Equals(tipLbl.Tag, "security-tip-text"))
+                    {
+                        tipLbl.Text = tip;
+                    }
+                }
+            }
+
             securityIssueEntriesHost.Controls.Clear();
-            // Dock=Top reverse order: add bottom-first so first entry appears at top.
             for (int i = entries.Count - 1; i >= 0; i--)
             {
                 securityIssueEntriesHost.Controls.Add(CreateSecurityIssueEntryRow(entries[i]));
@@ -3002,13 +3185,13 @@ namespace PasswordManager
         {
             var badge = new ServiceBadgeControl
             {
-                Width = 32,
-                Height = 32,
+                Width = 34,
+                Height = 34,
                 ServiceName = account.Service,
                 WebsiteUrl = account.Url,
                 Location = new System.Drawing.Point(0, 8)
             };
-            var badgeHost = new Panel { Dock = DockStyle.Left, Width = 40, BackColor = AppTheme.PanelBackground };
+            var badgeHost = new Panel { Dock = DockStyle.Left, Width = 42, BackColor = AppTheme.Surface };
             badgeHost.Controls.Add(badge);
 
             var name = new Label
@@ -3017,7 +3200,8 @@ namespace PasswordManager
                 Dock = DockStyle.Top,
                 Height = 20,
                 Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
-                ForeColor = AppTheme.TextPrimary
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Surface
             };
             var user = new Label
             {
@@ -3025,9 +3209,10 @@ namespace PasswordManager
                 Dock = DockStyle.Top,
                 Height = 18,
                 Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary
+                ForeColor = AppTheme.TextSecondary,
+                BackColor = AppTheme.Surface
             };
-            var textCol = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.PanelBackground };
+            var textCol = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(8, 6, 4, 4) };
             textCol.Controls.Add(user);
             textCol.Controls.Add(name);
 
@@ -3035,24 +3220,59 @@ namespace PasswordManager
             {
                 Text = "›",
                 Dock = DockStyle.Right,
-                Width = 20,
+                Width = 18,
                 Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
                 ForeColor = AppTheme.TextSecondary,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.Surface
             };
 
-            var row = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = AppTheme.PanelBackground, Padding = new Padding(0, 4, 0, 4), Cursor = Cursors.Hand };
-            row.Controls.Add(textCol);
-            row.Controls.Add(chevron);
-            row.Controls.Add(badgeHost);
+            var btnOpen = new Button
+            {
+                Text = "Edit",
+                Dock = DockStyle.Right,
+                Width = 56,
+                Height = 28,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.Accent,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9f, System.Drawing.FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 10, 0, 10)
+            };
+            btnOpen.FlatAppearance.BorderSize = 0;
+            btnOpen.FlatAppearance.MouseOverBackColor = AppTheme.AccentSubtle;
+            btnOpen.FlatAppearance.MouseDownBackColor = AppTheme.AccentSubtle;
+            btnOpen.Click += (s, e) => EditEntryForAccount(account);
+
+            var actions = new Panel { Dock = DockStyle.Right, Width = 78, BackColor = AppTheme.Surface, Padding = new Padding(0, 10, 0, 10) };
+            actions.Controls.Add(btnOpen);
+            actions.Controls.Add(chevron);
+
+            var inset = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(10, 4, 8, 4)
+            };
+            inset.Controls.Add(textCol);
+            inset.Controls.Add(actions);
+            inset.Controls.Add(badgeHost);
+
+            var border = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 58,
+                BackColor = AppTheme.Border,
+                Padding = new Padding(0, 0, 0, 1),
+                Margin = new Padding(0)
+            };
+            border.Controls.Add(inset);
 
             void openInVault(object s, EventArgs e)
             {
                 ShowAllItemsView();
                 SelectNavRow(allItemsNavRow);
-
-                // MultiSelect defaults to true, so selecting without clearing leaves the
-                // first row selected and the details panel stuck on that entry.
                 dgvAccounts.ClearSelection();
                 foreach (DataGridViewRow gridRow in dgvAccounts.Rows)
                 {
@@ -3066,11 +3286,48 @@ namespace PasswordManager
                 }
             }
 
-            row.Click += openInVault;
             name.Click += openInVault;
             user.Click += openInVault;
-            chevron.Click += openInVault;
-            return row;
+            badgeHost.Click += openInVault;
+            return border;
+        }
+
+        /// Opens the Add/Edit Entry dialog for a specific vault account (Security issue Open).
+        private void EditEntryForAccount(Account account)
+        {
+            if (account == null)
+            {
+                return;
+            }
+
+            using (var editEntryForm = new AddEntryForm(account))
+            {
+                editEntryForm.StartPosition = FormStartPosition.CenterParent;
+
+                if (editEntryForm.ShowDialog(this) == DialogResult.OK)
+                {
+                    account.Service = editEntryForm.Service;
+                    account.Username = editEntryForm.Username;
+                    account.Password = editEntryForm.Password;
+                    account.Url = editEntryForm.Url;
+                    account.Notes = editEntryForm.Notes;
+                    account.ModifiedAt = DateTime.Now;
+
+                    CaptureUsernameSuggestion(account.Username);
+                    WarnIfPasswordReused(account);
+                    int index = accounts.IndexOf(account);
+                    if (index >= 0)
+                    {
+                        accounts.ResetItem(index);
+                    }
+
+                    RefreshSecurityHealth();
+                    if (activeSecurityIssue is PasswordHealth.IssueKind kind)
+                    {
+                        ShowSecurityIssue(kind);
+                    }
+                }
+            }
         }
 
         /// Builds the Settings page's middle (heading + Vault card) and right (summary)
