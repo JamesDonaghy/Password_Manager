@@ -523,6 +523,7 @@ namespace PasswordManager
                 if (dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount)
                 {
                     clipboardGuard.CopyAndAutoClear(selectedAccount.Username);
+                    DialogControls.IndicateCopied(btnDetailsCopyUsername);
                 }
             };
             var usernameGroup = DialogControls.CreateFieldGroup("USERNAME", DialogControls.CreateBorderedFieldRow(lblDetailsUsername, btnDetailsCopyUsername), 34);
@@ -546,6 +547,7 @@ namespace PasswordManager
                 if (dgvAccounts.CurrentRow?.DataBoundItem is Account selectedAccount)
                 {
                     clipboardGuard.CopyAndAutoClear(selectedAccount.Password);
+                    DialogControls.IndicateCopied(btnDetailsCopyPassword);
                 }
             };
             var passwordGroup = DialogControls.CreateFieldGroup("PASSWORD", DialogControls.CreateBorderedFieldRow(lblDetailsPassword, btnDetailsTogglePassword, btnDetailsCopyPassword), 34);
@@ -1155,7 +1157,14 @@ namespace PasswordManager
 
             txtGeneratedPassword = GenResultBox();
             var btnCopy = GenSquareBtn("📋", "Copy");
-            btnCopy.Click += (s, e) => { if (!string.IsNullOrEmpty(txtGeneratedPassword.Text)) clipboardGuard.CopyAndAutoClear(txtGeneratedPassword.Text); };
+            btnCopy.Click += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(txtGeneratedPassword.Text))
+                {
+                    clipboardGuard.CopyAndAutoClear(txtGeneratedPassword.Text);
+                    DialogControls.IndicateCopied(btnCopy);
+                }
+            };
             var btnRegen = GenSquareBtn("↻", "Regenerate");
             btnRegen.Click += (s, e) => RegeneratePasswordFromOptions();
 
@@ -1207,7 +1216,14 @@ namespace PasswordManager
 
             txtGeneratedPassphrase = GenResultBox();
             var btnCopy = GenSquareBtn("📋", "Copy");
-            btnCopy.Click += (s, e) => { if (!string.IsNullOrEmpty(txtGeneratedPassphrase.Text)) clipboardGuard.CopyAndAutoClear(txtGeneratedPassphrase.Text); };
+            btnCopy.Click += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(txtGeneratedPassphrase.Text))
+                {
+                    clipboardGuard.CopyAndAutoClear(txtGeneratedPassphrase.Text);
+                    DialogControls.IndicateCopied(btnCopy);
+                }
+            };
             var btnRegen = GenSquareBtn("↻", "Regenerate");
             btnRegen.Click += (s, e) => RegeneratePassphraseFromOptions();
 
@@ -1344,7 +1360,14 @@ namespace PasswordManager
 
             txtGeneratedUsername = GenResultBox();
             var btnCopy = GenSquareBtn("📋", "Copy");
-            btnCopy.Click += (s, e) => { if (!string.IsNullOrEmpty(txtGeneratedUsername.Text)) clipboardGuard.CopyAndAutoClear(txtGeneratedUsername.Text); };
+            btnCopy.Click += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(txtGeneratedUsername.Text))
+                {
+                    clipboardGuard.CopyAndAutoClear(txtGeneratedUsername.Text);
+                    DialogControls.IndicateCopied(btnCopy);
+                }
+            };
             var btnRegen = GenSquareBtn("↻", "Regenerate");
             btnRegen.Click += (s, e) => RegenerateUsernameFromOptions();
 

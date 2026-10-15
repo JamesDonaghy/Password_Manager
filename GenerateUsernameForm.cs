@@ -145,6 +145,7 @@ namespace PasswordManager
                     try
                     {
                         Clipboard.SetText(txtResult.Text);
+                        DialogControls.IndicateCopied(btnCopy);
                     }
                     catch
                     {

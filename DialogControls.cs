@@ -157,6 +157,48 @@ namespace PasswordManager
             return button;
         }
 
+        /// Briefly switches a Copy button to a "Copied" state so the user gets inline feedback
+        /// that the clipboard write succeeded. Restores the original label after a short delay.
+        public static void IndicateCopied(Button button, int milliseconds = 1500)
+        {
+            if (button == null || button.IsDisposed)
+            {
+                return;
+            }
+
+            // Avoid stacking timers if the user clicks Copy repeatedly.
+            if (button.Tag is System.Windows.Forms.Timer existing)
+            {
+                existing.Stop();
+                existing.Dispose();
+                button.Tag = null;
+            }
+
+            string originalText = button.Text;
+            var originalFore = button.ForeColor;
+
+            button.Text = "Copied";
+            button.ForeColor = System.Drawing.Color.FromArgb(0x2F, 0x9E, 0x6B);
+
+            var timer = new System.Windows.Forms.Timer { Interval = milliseconds };
+            button.Tag = timer;
+            timer.Tick += (s, e) =>
+            {
+                timer.Stop();
+                timer.Dispose();
+                if (!button.IsDisposed)
+                {
+                    button.Text = originalText;
+                    button.ForeColor = originalFore;
+                    if (ReferenceEquals(button.Tag, timer))
+                    {
+                        button.Tag = null;
+                    }
+                }
+            };
+            timer.Start();
+        }
+
         /// Wraps a value control (and optional trailing action buttons, e.g. Copy/Show)
         /// in a bordered, white "field box". Single-line TextBox/ComboBox inputs are
         /// vertically centered so the caret is not stuck at the top of a taller row.
