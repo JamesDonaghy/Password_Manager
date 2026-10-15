@@ -159,6 +159,8 @@ namespace PasswordManager
 
         /// Briefly switches a Copy button to a "Copied" state so the user gets inline feedback
         /// that the clipboard write succeeded. Restores the original label after a short delay.
+        /// Rapid/double clicks keep the first original label so the button does not get stuck
+        /// restoring to "Copied".
         public static void IndicateCopied(Button button, int milliseconds = 1500)
         {
             if (button == null || button.IsDisposed)
@@ -166,22 +168,36 @@ namespace PasswordManager
                 return;
             }
 
-            // Avoid stacking timers if the user clicks Copy repeatedly.
-            if (button.Tag is System.Windows.Forms.Timer existing)
+            string originalText;
+            System.Drawing.Color originalFore;
+
+            // Tag holds (timer, originalText, originalFore) while flashing.
+            if (button.Tag is object[] state
+                && state.Length == 3
+                && state[0] is System.Windows.Forms.Timer existing)
             {
                 existing.Stop();
                 existing.Dispose();
-                button.Tag = null;
+                originalText = state[1] as string ?? "Copy";
+                originalFore = state[2] is System.Drawing.Color c ? c : AppTheme.Accent;
             }
-
-            string originalText = button.Text;
-            var originalFore = button.ForeColor;
+            else
+            {
+                originalText = button.Text;
+                originalFore = button.ForeColor;
+                // Safety if a previous flash left the label as "Copied" without state.
+                if (string.Equals(originalText, "Copied", StringComparison.Ordinal))
+                {
+                    originalText = "Copy";
+                    originalFore = AppTheme.Accent;
+                }
+            }
 
             button.Text = "Copied";
             button.ForeColor = System.Drawing.Color.FromArgb(0x2F, 0x9E, 0x6B);
 
             var timer = new System.Windows.Forms.Timer { Interval = milliseconds };
-            button.Tag = timer;
+            button.Tag = new object[] { timer, originalText, originalFore };
             timer.Tick += (s, e) =>
             {
                 timer.Stop();
@@ -190,7 +206,9 @@ namespace PasswordManager
                 {
                     button.Text = originalText;
                     button.ForeColor = originalFore;
-                    if (ReferenceEquals(button.Tag, timer))
+                    if (button.Tag is object[] tagState
+                        && tagState.Length > 0
+                        && ReferenceEquals(tagState[0], timer))
                     {
                         button.Tag = null;
                     }
