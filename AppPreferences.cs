@@ -19,6 +19,7 @@ namespace PasswordManager
         private static bool showWebsiteIcons = true;
         private static AccountSortMode sortMode = AccountSortMode.NameAscending;
         private static int autoLockMinutes = 5;
+        private static AppTheme.Preference themePreference = AppTheme.Preference.System;
 
         // Generation defaults used by Add/Edit Entry (and kept for future Generator reuse).
         private static int passwordLength = 20;
@@ -93,6 +94,27 @@ namespace PasswordManager
                 }
 
                 autoLockMinutes = clamped;
+                Save();
+            }
+        }
+
+        /// Light, Dark, or System (follow Windows apps appearance). Default System.
+        public static AppTheme.Preference ThemePreference
+        {
+            get
+            {
+                EnsureLoaded();
+                return themePreference;
+            }
+            set
+            {
+                EnsureLoaded();
+                if (themePreference == value)
+                {
+                    return;
+                }
+
+                themePreference = value;
                 Save();
             }
         }
@@ -221,6 +243,12 @@ namespace PasswordManager
                     if (data.PassphraseCapitalize.HasValue) passphraseCapitalize = data.PassphraseCapitalize.Value;
                     if (data.PassphraseNumbers.HasValue) passphraseNumbers = data.PassphraseNumbers.Value;
                     if (data.PassphraseSpecial.HasValue) passphraseSpecial = data.PassphraseSpecial.Value;
+
+                    if (!string.IsNullOrEmpty(data.ThemePreference) &&
+                        Enum.TryParse(data.ThemePreference, ignoreCase: true, out AppTheme.Preference parsedTheme))
+                    {
+                        themePreference = parsedTheme;
+                    }
                 }
             }
             catch
@@ -244,6 +272,7 @@ namespace PasswordManager
                     ShowWebsiteIcons = showWebsiteIcons,
                     SortMode = sortMode.ToString(),
                     AutoLockMinutes = autoLockMinutes,
+                    ThemePreference = themePreference.ToString(),
                     PasswordLength = passwordLength,
                     PasswordUppercase = passwordUppercase,
                     PasswordLowercase = passwordLowercase,
@@ -267,6 +296,7 @@ namespace PasswordManager
             public bool ShowWebsiteIcons { get; set; } = true;
             public string SortMode { get; set; } = nameof(AccountSortMode.NameAscending);
             public int? AutoLockMinutes { get; set; }
+            public string ThemePreference { get; set; } = nameof(AppTheme.Preference.System);
             public int? PasswordLength { get; set; }
             public bool? PasswordUppercase { get; set; }
             public bool? PasswordLowercase { get; set; }

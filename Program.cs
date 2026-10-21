@@ -10,7 +10,11 @@ namespace PasswordManager
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new LoginForm()); // Start with the LoginForm
+
+            // Load theme preference before any form paints (avoids a wrong-mode flash later).
+            AppTheme.Initialize();
+
+            Application.Run(new LoginForm());
         }
     }
 }

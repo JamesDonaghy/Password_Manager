@@ -59,6 +59,13 @@ namespace PasswordManager
         private readonly Dictionary<PasswordHealth.IssueKind, System.Drawing.Color> healthPillBaseColors = new Dictionary<PasswordHealth.IssueKind, System.Drawing.Color>();
         private Panel settingsMiddlePanel;
         private Panel settingsRightPanel;
+        private RadioButton radioThemeLight;
+        private RadioButton radioThemeDark;
+        private RadioButton radioThemeSystem;
+        private Panel themePreviewPanel;
+        private Label themePreviewTitle;
+        private Label themePreviewBody;
+        private Label themePreviewStatus;
         private Panel generatorMiddlePanel;
         private Panel generatorRightPanel;
         private TextBox txtGeneratedPassword;
@@ -161,6 +168,21 @@ namespace PasswordManager
 
             this.ResumeLayout(false);
             this.PerformLayout();
+
+            AppTheme.Changed += OnAppThemeChanged;
+            this.FormClosed += (s, e) => AppTheme.Changed -= OnAppThemeChanged;
+        }
+
+        private void OnAppThemeChanged(object sender, EventArgs e)
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            // Foundation only: update Appearance radios + theme preview card.
+            SyncThemePreferenceRadios();
+            ApplyThemePreview();
         }
 
         private void InitializeComponent()
@@ -3478,52 +3500,138 @@ namespace PasswordManager
             return container;
         }
 
-        /// Appearance settings card with the website-icons toggle.
+        /// Appearance settings: theme selector (Light / Dark / System) plus website-icons toggle.
         private Panel BuildAppearanceSettingsCard()
         {
-            var lblTitle = new Label
+            var stack = new Panel { Dock = DockStyle.Top, AutoSize = true, BackColor = AppTheme.Background };
+
+            // --- Theme preference card ---
+            var themeHeader = BuildSettingsCardHeader(
+                "Theme",
+                "Choose your preferred appearance mode.");
+
+            radioThemeLight = null;
+            radioThemeDark = null;
+            radioThemeSystem = null;
+
+            var lightRow = CreateThemeOptionRow(
+                "☀", "Light", "Always use the light theme.",
+                AppTheme.Preference.Light, out radioThemeLight);
+            var darkRow = CreateThemeOptionRow(
+                "🌙", "Dark", "Always use the dark theme.",
+                AppTheme.Preference.Dark, out radioThemeDark);
+            var systemRow = CreateThemeOptionRow(
+                "🖥", "Use system setting", "Follow the Windows appearance preference.",
+                AppTheme.Preference.System, out radioThemeSystem);
+
+            SyncThemePreferenceRadios();
+
+            var themeNote = new Label
             {
-                Text = "Appearance",
+                Text = "ℹ  Preference is saved. Full dark UI rolls out in a later update — preview below.",
+                Dock = DockStyle.Top,
+                Height = 32,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(16, 6, 16, 4),
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+
+            // Small live preview surface (foundation proof that switching works).
+            themePreviewTitle = new Label
+            {
+                Text = "Preview",
                 Dock = DockStyle.Top,
                 Height = 22,
-                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10.5f, System.Drawing.FontStyle.Bold),
-                ForeColor = AppTheme.TextPrimary,
-                TextAlign = System.Drawing.ContentAlignment.BottomLeft
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Padding = new Padding(12, 4, 12, 0)
             };
-            var lblDescription = new Label
+            themePreviewBody = new Label
             {
-                Text = "How entries look in the vault list and details panel.",
+                Text = "Sample card using the selected theme tokens.",
                 Dock = DockStyle.Top,
                 Height = 20,
                 Font = AppTheme.Base,
-                ForeColor = AppTheme.TextSecondary,
-                TextAlign = System.Drawing.ContentAlignment.TopLeft
+                TextAlign = System.Drawing.ContentAlignment.TopLeft,
+                Padding = new Padding(12, 0, 12, 0)
             };
-            var cardHeader = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = AppTheme.Surface, Padding = new Padding(16, 16, 16, 0) };
-            cardHeader.Controls.Add(lblDescription);
-            cardHeader.Controls.Add(lblTitle);
-
-            var titleLabel = new Label
+            themePreviewStatus = new Label
             {
-                Text = "Website icons",
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = AppTheme.Base,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Padding = new Padding(12, 0, 12, 4)
+            };
+            themePreviewPanel = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 88,
+                Padding = new Padding(1),
+                Margin = new Padding(16, 4, 16, 12)
+            };
+            var previewInner = new Panel { Dock = DockStyle.Fill };
+            previewInner.Controls.Add(themePreviewStatus);
+            previewInner.Controls.Add(themePreviewBody);
+            previewInner.Controls.Add(themePreviewTitle);
+            themePreviewPanel.Controls.Add(previewInner);
+            ApplyThemePreview();
+
+            var previewHost = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 100,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(16, 4, 16, 12)
+            };
+            previewHost.Controls.Add(themePreviewPanel);
+
+            const int themeRowH = 56;
+            const int themeHeaderH = 64;
+            int themeInnerH = themeHeaderH + themeRowH * 3 + 32 + 100 + 8;
+            var themeInset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            themeInset.Controls.Add(previewHost);
+            themeInset.Controls.Add(themeNote);
+            themeInset.Controls.Add(systemRow);
+            themeInset.Controls.Add(darkRow);
+            themeInset.Controls.Add(lightRow);
+            themeInset.Controls.Add(themeHeader);
+
+            var themeBorder = new Panel { Dock = DockStyle.Top, Height = themeInnerH + 2, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            themeBorder.Controls.Add(themeInset);
+            var themeCard = new Panel { Dock = DockStyle.Top, Height = themeInnerH + 2 + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16) };
+            themeCard.Controls.Add(themeBorder);
+
+            // --- Website icons (unchanged behaviour) ---
+            var iconsHeader = BuildSettingsCardHeader(
+                "Website icons",
+                "How entries look in the vault list and details panel.");
+
+            var iconsTitle = new Label
+            {
+                Text = "Show website icons",
                 Dock = DockStyle.Top,
                 Height = 22,
                 Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10f, System.Drawing.FontStyle.Bold),
                 ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Surface,
                 TextAlign = System.Drawing.ContentAlignment.BottomLeft
             };
-            var descriptionLabel = new Label
+            var iconsDesc = new Label
             {
                 Text = "Show each site's favicon instead of the coloured letter badge.",
                 Dock = DockStyle.Top,
                 Height = 20,
                 Font = AppTheme.Base,
                 ForeColor = AppTheme.TextSecondary,
+                BackColor = AppTheme.Surface,
                 TextAlign = System.Drawing.ContentAlignment.TopLeft
             };
-            var textStack = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
-            textStack.Controls.Add(descriptionLabel);
-            textStack.Controls.Add(titleLabel);
+            var iconsText = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            iconsText.Controls.Add(iconsDesc);
+            iconsText.Controls.Add(iconsTitle);
 
             var iconsToggle = new CheckBox
             {
@@ -3544,29 +3652,221 @@ namespace PasswordManager
                 serviceBadge?.Invalidate();
             };
 
-            var toggleRow = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = AppTheme.Surface, Padding = new Padding(16, 10, 16, 10) };
-            toggleRow.Controls.Add(textStack);
-            toggleRow.Controls.Add(iconsToggle);
+            var iconsRow = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = AppTheme.Surface, Padding = new Padding(16, 10, 16, 10) };
+            iconsRow.Controls.Add(iconsText);
+            iconsRow.Controls.Add(iconsToggle);
 
-            var headerDivider = CreateInsetDivider();
+            const int iconsCardH = 64 + 1 + 64 + 2;
+            var iconsInset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+            iconsInset.Controls.Add(iconsRow);
+            iconsInset.Controls.Add(CreateInsetDivider());
+            iconsInset.Controls.Add(iconsHeader);
+            var iconsBorder = new Panel { Dock = DockStyle.Top, Height = iconsCardH, BackColor = AppTheme.Border, Padding = new Padding(1) };
+            iconsBorder.Controls.Add(iconsInset);
+            var iconsCard = new Panel { Dock = DockStyle.Top, Height = iconsCardH + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16) };
+            iconsCard.Controls.Add(iconsBorder);
 
-            const int headerHeight = 64;
-            const int rowHeight = 64;
-            const int dividerHeight = 1;
-            const int cardHeight = headerHeight + dividerHeight + rowHeight + 2;
-
-            var cardInset = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
-            cardInset.Controls.Add(toggleRow);
-            cardInset.Controls.Add(headerDivider);
-            cardInset.Controls.Add(cardHeader);
-
-            var cardBorder = new Panel { Dock = DockStyle.Top, Height = cardHeight, BackColor = AppTheme.Border, Padding = new Padding(1) };
-            cardBorder.Controls.Add(cardInset);
-
-            var cardWithMargin = new Panel { Dock = DockStyle.Top, Height = cardHeight + 16, BackColor = AppTheme.Background, Padding = new Padding(0, 0, 0, 16) };
-            cardWithMargin.Controls.Add(cardBorder);
-            return cardWithMargin;
+            stack.Controls.Add(iconsCard);
+            stack.Controls.Add(themeCard);
+            stack.Height = themeCard.Height + iconsCard.Height;
+            return stack;
         }
+
+        private void ApplyThemePreview()
+        {
+            if (themePreviewPanel == null)
+            {
+                return;
+            }
+
+            themePreviewPanel.BackColor = AppTheme.PreviewBorder;
+            foreach (Control c in themePreviewPanel.Controls)
+            {
+                c.BackColor = AppTheme.PreviewSurface;
+            }
+
+            if (themePreviewTitle != null)
+            {
+                themePreviewTitle.BackColor = AppTheme.PreviewSurface;
+                themePreviewTitle.ForeColor = AppTheme.PreviewTextPrimary;
+            }
+            if (themePreviewBody != null)
+            {
+                themePreviewBody.BackColor = AppTheme.PreviewSurface;
+                themePreviewBody.ForeColor = AppTheme.PreviewTextSecondary;
+            }
+            if (themePreviewStatus != null)
+            {
+                themePreviewStatus.BackColor = AppTheme.PreviewSurface;
+                themePreviewStatus.ForeColor = AppTheme.PreviewAccent;
+                string mode = AppTheme.IsDark ? "Dark" : "Light";
+                string pref = AppTheme.CurrentPreference.ToString();
+                themePreviewStatus.Text = $"Effective: {mode}  ·  Preference: {pref}";
+            }
+        }
+
+        private static Panel BuildSettingsCardHeader(string title, string description)
+        {
+            var lblTitle = new Label
+            {
+                Text = title,
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 10.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Surface,
+                TextAlign = System.Drawing.ContentAlignment.BottomLeft
+            };
+            var lblDescription = new Label
+            {
+                Text = description,
+                Dock = DockStyle.Top,
+                Height = 20,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                BackColor = AppTheme.Surface,
+                TextAlign = System.Drawing.ContentAlignment.TopLeft
+            };
+            var header = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = AppTheme.Surface, Padding = new Padding(16, 16, 16, 0) };
+            header.Controls.Add(lblDescription);
+            header.Controls.Add(lblTitle);
+            return header;
+        }
+
+        private Panel CreateThemeOptionRow(
+            string icon,
+            string title,
+            string description,
+            AppTheme.Preference preference,
+            out RadioButton radio)
+        {
+            radio = new RadioButton
+            {
+                Dock = DockStyle.Left,
+                Width = 28,
+                Checked = false,
+                Cursor = Cursors.Hand,
+                BackColor = AppTheme.Surface,
+                FlatStyle = FlatStyle.Flat
+            };
+            var captured = preference;
+            var radioRef = radio;
+            radio.CheckedChanged += (s, e) =>
+            {
+                if (!radioRef.Checked)
+                {
+                    return;
+                }
+
+                AppTheme.CurrentPreference = captured;
+            };
+
+            var iconLbl = new Label
+            {
+                Text = icon,
+                Dock = DockStyle.Left,
+                Width = 32,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 12f),
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.Accent
+            };
+
+            var titleLbl = new Label
+            {
+                Text = title,
+                Dock = DockStyle.Top,
+                Height = 20,
+                Font = new System.Drawing.Font(AppTheme.Base.FontFamily, 9.5f, System.Drawing.FontStyle.Bold),
+                ForeColor = AppTheme.TextPrimary,
+                BackColor = AppTheme.Surface,
+                Cursor = Cursors.Hand
+            };
+            var descLbl = new Label
+            {
+                Text = description,
+                Dock = DockStyle.Top,
+                Height = 18,
+                Font = AppTheme.Base,
+                ForeColor = AppTheme.TextSecondary,
+                BackColor = AppTheme.Surface,
+                Cursor = Cursors.Hand
+            };
+            var textCol = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(10, 8, 8, 6) };
+            textCol.Controls.Add(descLbl);
+            textCol.Controls.Add(titleLbl);
+
+            var row = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 56,
+                BackColor = AppTheme.Surface,
+                Padding = new Padding(12, 6, 12, 6),
+                Cursor = Cursors.Hand
+            };
+            row.Controls.Add(textCol);
+            row.Controls.Add(iconLbl);
+            row.Controls.Add(radio);
+
+            void Select()
+            {
+                radioRef.Checked = true;
+            }
+
+            titleLbl.Click += (s, e) => Select();
+            descLbl.Click += (s, e) => Select();
+            textCol.Click += (s, e) => Select();
+            row.Click += (s, e) => Select();
+            iconLbl.Click += (s, e) => Select();
+
+            return row;
+        }
+
+        private void SyncThemePreferenceRadios()
+        {
+            if (radioThemeLight == null || radioThemeDark == null || radioThemeSystem == null)
+            {
+                return;
+            }
+
+            var pref = AppTheme.CurrentPreference;
+            radioThemeLight.Checked = pref == AppTheme.Preference.Light;
+            radioThemeDark.Checked = pref == AppTheme.Preference.Dark;
+            radioThemeSystem.Checked = pref == AppTheme.Preference.System;
+
+            StyleThemeOptionRow(radioThemeLight);
+            StyleThemeOptionRow(radioThemeDark);
+            StyleThemeOptionRow(radioThemeSystem);
+        }
+
+        private static void StyleThemeOptionRow(RadioButton radio)
+        {
+            if (radio?.Parent == null)
+            {
+                return;
+            }
+
+            bool on = radio.Checked;
+            // Full row one fill (including icon) — no separate purple chip behind icons.
+            System.Drawing.Color fill = on ? AppTheme.AccentSubtle : AppTheme.Surface;
+
+            void PaintTree(Control c)
+            {
+                if (c.BackColor.A != 0)
+                {
+                    c.BackColor = fill;
+                }
+
+                foreach (Control child in c.Controls)
+                {
+                    PaintTree(child);
+                }
+            }
+
+            PaintTree(radio.Parent);
+            radio.BackColor = fill;
+        }
+
 
         /// Builds one clickable "title / description / ›" row for the Settings page's Vault
         /// card (Backup Vault, Restore Vault) - firing onClick, the same handler already
